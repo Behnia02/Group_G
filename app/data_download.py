@@ -8,7 +8,8 @@ DATASETS: Dict[str, str] = {
     "annual_deforestation": "https://ourworldindata.org/grapher/annual-deforestation.csv",
     "land_protected": "https://ourworldindata.org/grapher/share-of-land-area-protected.csv",
     "land_degraded": "https://ourworldindata.org/grapher/share-of-land-degraded.csv",
-   "mountain_ecosystems": "https://ourworldindata.org/grapher/mountain-ecosystems-protected.csv",
+    "mountain_ecosystems": "https://ourworldindata.org/grapher/mountain-ecosystems-protected.csv",
+    "world_map": "https://naturalearth.s3.amazonaws.com/110m_cultural/ne_110m_admin_0_countries.zip",
 }
 
 
