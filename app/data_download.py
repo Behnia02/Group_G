@@ -1,8 +1,9 @@
+# First step is to create a function to download the datasets. Import necessary libraries
 from pathlib import Path
 import requests
 from typing import Dict
 
-
+# Create a dictionary of dataset names and their corresponding URLs for easy management and iteration.
 DATASETS: Dict[str, str] = {
     "forest_area_change": "https://ourworldindata.org/grapher/annual-change-forest-area.csv",
     "annual_deforestation": "https://ourworldindata.org/grapher/annual-deforestation.csv",
@@ -12,10 +13,10 @@ DATASETS: Dict[str, str] = {
     "world_map": "https://naturalearth.s3.amazonaws.com/110m_cultural/ne_110m_admin_0_countries.zip",
 }
 
-
+# This function will be one of the final functions called in the class included in the main.py file. It will download all the datasets we need for our project and save them in a specified directory.
 def download_datasets(download_dir: str = "downloads") -> None:
     """
-    Download all required datasets into the specified directory.
+    Download all required datasets into the "downloads" directory.
 
     Parameters
     ----------
