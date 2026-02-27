@@ -6,9 +6,9 @@ from typing import Dict
 DATASETS: Dict[str, str] = {
     "forest_area_change": "https://ourworldindata.org/grapher/annual-change-forest-area.csv",
     "annual_deforestation": "https://ourworldindata.org/grapher/annual-deforestation.csv",
-    "land_protected": "https://ourworldindata.org/grapher/share-of-land-area-protected.csv",
-    "land_degraded": "https://ourworldindata.org/grapher/share-of-land-degraded.csv",
-    "mountain_ecosystems": "https://ourworldindata.org/grapher/mountain-ecosystems-protected.csv",
+    "land_protected": "https://ourworldindata.org/grapher/terrestrial-protected-areas.csv",
+    "land_degraded": "https://ourworldindata.org/grapher/share-degraded-land.csv",
+    "mountain_ecosystems": "https://ourworldindata.org/grapher/coverage-by-protected-areas-of-important-sites-for-mountain-biodiversity.csv",
     "world_map": "https://naturalearth.s3.amazonaws.com/110m_cultural/ne_110m_admin_0_countries.zip",
 }
 
@@ -38,9 +38,13 @@ def download_datasets(download_dir: str = "downloads") -> None:
         # Skip download if file already exists (idempotency!)
         if file_path.exists():
             continue
-
+        
         response = requests.get(url, timeout=30)
         response.raise_for_status()
 
         with open(file_path, "wb") as file:
             file.write(response.content)
+
+        print(f"SAVED: {file_path.name}")
+
+        
