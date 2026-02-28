@@ -1,8 +1,6 @@
 import streamlit as st
 from main import EnvironmentalData
 
-st.write("App started successfully")
-
 st.set_page_config(page_title="Project Okavango", layout="wide")
 
 st.title("Project Okavango")
@@ -16,8 +14,31 @@ def load_data() -> EnvironmentalData:
 
 data = load_data()
 
-st.success("Data loaded successfully!")
+# ----------------------------
+# SIDEBAR FILTERS
+# ----------------------------
+st.sidebar.header("Filters")
 
 indicators = data.get_available_indicators()
-st.write("Available Indicators:")
-st.write(indicators)
+
+selected_indicator = st.sidebar.selectbox(
+    "Select Indicator",
+    indicators
+)
+
+# ----------------------------
+# YEAR SELECTION
+# ----------------------------
+years = data.get_available_years(selected_indicator)
+
+if not years:
+    st.warning("No years available for this indicator.")
+    st.stop()
+
+default_year = max(years)
+
+selected_year = st.sidebar.selectbox(
+    "Select Year",
+    years,
+    index=years.index(default_year)
+)
