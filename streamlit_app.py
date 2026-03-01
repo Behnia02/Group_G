@@ -48,8 +48,9 @@ selected_year = st.sidebar.selectbox(
 # LOAD DATA FOR CURRENT SELECTION
 # ----------------------------
 
-gdf = data.get_geodata(selected_indicator, selected_year)
-top_bottom_df = data.get_top_bottom(selected_indicator, selected_year)
+with st.spinner("Loading data..."):
+    gdf = data.get_geodata(selected_indicator, selected_year)
+    top_bottom_df = data.get_top_bottom(selected_indicator, selected_year)
 
 # ----------------------------
 # MAP SECTION
@@ -60,7 +61,7 @@ st.subheader(f"{selected_indicator} — {selected_year}")
 if gdf.empty:
     st.warning("No data available for this selection.")
 else:
-    fig, ax = plt.subplots(figsize=(12, 6))
+    fig, ax = plt.subplots(figsize=(8, 4))
 
     gdf.plot(
         column=selected_indicator,
