@@ -6,6 +6,9 @@ st.set_page_config(page_title="Project Okavango", layout="wide")
 
 st.title("Project Okavango")
 
+def pretty_label(s):
+    return s.replace("_", " ").title()
+
 @st.cache_resource
 def load_data() -> EnvironmentalData:
     """
@@ -24,7 +27,8 @@ indicators = data.get_available_indicators()
 
 selected_indicator = st.sidebar.selectbox(
     "Select Indicator",
-    indicators
+    indicators,
+    format_func=pretty_label
 )
 
 # ----------------------------
@@ -38,10 +42,10 @@ if not years:
 
 default_year = max(years)
 
-selected_year = st.sidebar.selectbox(
+selected_year = st.sidebar.select_slider(
     "Select Year",
-    years,
-    index=years.index(default_year)
+    options=years,
+    value=max(years),
 )
 
 # ----------------------------
@@ -56,12 +60,12 @@ with st.spinner("Loading data..."):
 # MAP SECTION
 # ----------------------------
 
-st.subheader(f"{selected_indicator} — {selected_year}")
+st.subheader(f"{pretty_label(selected_indicator)} — {selected_year}")
 
 if gdf.empty:
     st.warning("No data available for this selection.")
 else:
-    fig, ax = plt.subplots(figsize=(8, 4))
+    fig, ax = plt.subplots(figsize=(14, 7))
 
     gdf.plot(
         column=selected_indicator,
@@ -70,7 +74,7 @@ else:
         missing_kwds={"color": "lightgrey"},
     )
 
-    ax.set_title(f"{selected_indicator} ({selected_year})")
+    ax.set_title(f"{pretty_label(selected_indicator)} ({selected_year})")
     ax.set_axis_off()
 
     st.pyplot(fig)
@@ -104,8 +108,8 @@ else:
     )
 
     # Titles and formatted labels
-    ax2.set_title(f"Top & Bottom Countries — {selected_year}")
-    ax2.set_xlabel(selected_indicator.replace("_", " ").title())
+    ax2.set_title(f"Top & Bottom — {pretty_label(selected_indicator)} ({selected_year})")
+    ax2.set_xlabel(pretty_label(selected_indicator))
 
     # Invert axis so largest appears at top
     ax2.invert_yaxis()
