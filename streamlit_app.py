@@ -2,9 +2,7 @@ import json
 import streamlit as st
 import pandas as pd
 import geopandas as gpd
-import plotly.express as px
 import matplotlib.pyplot as plt
-from plotly.colors import sample_colorscale
 import plotly.graph_objects as go
 
 from main import EnvironmentalData
@@ -13,8 +11,16 @@ st.set_page_config(page_title="Project Okavango", layout="wide")
 
 st.title("Project Okavango")
 
-def pretty_label(s):
-    return s.replace("_", " ").title()
+DISPLAY_TITLES = {
+    "land_protected": "Share of Protected Land",
+    "annual_deforestation": "Annual Deforestation",
+    "mountain_ecosystems": "Protected Mountain Biodiversity",
+    "forest_area_change": "Change in Forest Area",
+    "land_degraded": "Share of Degraded Land",
+}
+
+def pretty_label(indicator_key: str) -> str:
+    return DISPLAY_TITLES.get(indicator_key, indicator_key.replace("_", " ").title())
 
 @st.cache_resource
 def load_data() -> EnvironmentalData:
@@ -152,7 +158,7 @@ if not value_df.empty:
             featureidkey=f"properties.{id_col}",
             z=value_df[selected_indicator],
             colorscale="Viridis",
-            colorbar=dict(title=legend_title, len=0.85),
+            colorbar=dict(title=dict(text=legend_title, side="right"), len=0.9),
             marker_line_color="black",
             marker_line_width=0.6,
             hovertext=value_df["Entity"],
