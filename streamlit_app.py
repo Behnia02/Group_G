@@ -1,5 +1,12 @@
+import json
 import streamlit as st
+import pandas as pd
+import geopandas as gpd
+import plotly.express as px
 import matplotlib.pyplot as plt
+from plotly.colors import sample_colorscale
+import plotly.graph_objects as go
+
 from main import EnvironmentalData
 
 st.set_page_config(page_title="Project Okavango", layout="wide")
@@ -60,24 +67,110 @@ with st.spinner("Loading data..."):
 # MAP SECTION
 # ----------------------------
 
-st.subheader(f"{pretty_label(selected_indicator)} — {selected_year}")
+# Title for the selected indicator/year
+st.subheader(f"{pretty_label(selected_indicator)} ({selected_year})")
 
-if gdf.empty:
+# Basic checks so the app doesn't crash
+if gdf.empty or selected_indicator not in gdf.columns:
     st.warning("No data available for this selection.")
-else:
-    fig, ax = plt.subplots(figsize=(14, 7))
+    st.stop()
 
-    gdf.plot(
-        column=selected_indicator,
-        ax=ax,
-        legend=True,
-        missing_kwds={"color": "lightgrey"},
+if "geometry" not in gdf.columns:
+    st.error("Geometry missing.")
+    st.stop()
+
+# Pick the ISO-3 id column (to match rows to country shapes)
+if "ISO_A3" in gdf.columns:
+    id_col = "ISO_A3"
+elif "Code" in gdf.columns:
+    id_col = "Code"
+else:
+    st.error("Missing ISO-3 country code column (expected ISO_A3 or Code).")
+    st.stop()
+
+# Keep only the columns needed to build the map
+map_df = gdf[[id_col, "Entity", selected_indicator, "geometry"]].dropna(subset=[id_col]).copy() 
+map_df[selected_indicator] = pd.to_numeric(map_df[selected_indicator], errors="coerce")
+
+# Units shown in the colorbar
+UNITS = {
+    "land_protected": "%",
+    "land_degraded": "%",
+    "mountain_ecosystems": "%",
+    "annual_deforestation": "ha",
+    "forest_area_change": "ha",
+}
+
+unit = UNITS.get(selected_indicator, "")
+legend_title = f"{pretty_label(selected_indicator)} ({unit})" if unit else pretty_label(selected_indicator)
+
+# Text shown on hover: value + unit, or "No data"
+def make_value_text(v):
+    if pd.isna(v):
+        return "No data"
+    return f"{v:.1f}{unit}" if unit else f"{v:.1f}"
+
+map_df["value_text"] = map_df[selected_indicator].apply(make_value_text)
+
+# Convert geometries to GeoJSON so Plotly can draw the country shapes
+geojson = json.loads(map_df.to_json())
+
+# Split into missing vs non-missing (so we can color missing values in grey)
+missing_df = map_df[map_df[selected_indicator].isna()]
+value_df = map_df[map_df[selected_indicator].notna()]
+
+fig_map = go.Figure()
+
+# Layer 1: missing values (grey)
+if not missing_df.empty:
+    fig_map.add_trace(
+        go.Choropleth(
+            geojson=geojson,
+            locations=missing_df[id_col],
+            featureidkey=f"properties.{id_col}",
+            z=[0] * len(missing_df),  # dummy values just to draw the shapes
+            colorscale=[[0, "lightgrey"], [1, "lightgrey"]],
+            showscale=False,
+            marker_line_color="black",
+            marker_line_width=0.6,
+            hovertext=missing_df["Entity"],
+            customdata=missing_df[["value_text"]],
+            hovertemplate=(
+                "<b>%{hovertext}</b><br>"
+                f"{pretty_label(selected_indicator)}: %{{customdata[0]}}"
+                "<extra></extra>"
+            ),
+        )
     )
 
-    ax.set_title(f"{pretty_label(selected_indicator)} ({selected_year})")
-    ax.set_axis_off()
+# Layer 2: real values (viridis)
+if not value_df.empty:
+    fig_map.add_trace(
+        go.Choropleth(
+            geojson=geojson,
+            locations=value_df[id_col],
+            featureidkey=f"properties.{id_col}",
+            z=value_df[selected_indicator],
+            colorscale="Viridis",
+            colorbar=dict(title=legend_title, len=0.85),
+            marker_line_color="black",
+            marker_line_width=0.6,
+            hovertext=value_df["Entity"],
+            customdata=value_df[["value_text"]],
+            hovertemplate=(
+                "<b>%{hovertext}</b><br>"
+                f"{pretty_label(selected_indicator)}: %{{customdata[0]}}"
+                "<extra></extra>"
+            ),
+        )
+    )
 
-    st.pyplot(fig)
+# Fit map nicely and remove background/axes
+fig_map.update_geos(fitbounds="locations", visible=False)
+fig_map.update_layout(height=350, margin=dict(l=0, r=0, t=10, b=0))
+
+st.plotly_chart(fig_map, use_container_width=True)
+st.caption("Grey countries indicate missing data for the selected indicator and year.")
 
 # ----------------------------
 # TOP & BOTTOM SECTION
