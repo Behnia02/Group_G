@@ -51,15 +51,20 @@ def build_chart_figure(df_all: pd.DataFrame, selected_indicator: str, selected_y
 
         # Create bins: 0–10, 10–20, ..., 90–100
         bins = list(range(0, 110, 10))
-        cats = pd.cut(vals, bins=bins, include_lowest=True, right=False)
 
-        # Count how many countries fall into each bin (in order), then convert counts to percentages of all countries
-        counts = cats.value_counts().sort_index()
+        # Create clean labels for each bin 
+        labels = [f"[{bins[i]}, {bins[i+1]}]" for i in range(len(bins) - 1)]
+
+        # Bin each value into the labeled ranges and count how many countries fall into each bin (keeping all bins in order).
+        cats = pd.cut(vals, bins=bins, labels=labels, include_lowest=True)
+        counts = cats.value_counts().reindex(labels, fill_value=0)
+
+        # Convert counts to percentages
         pct = (counts / counts.sum() * 100).round(1)
 
-        # Build a table for Plotly: bin label, percentage of countries in that bin, and the raw count
+        # Build a table for Plotly
         hist_df = pd.DataFrame({
-            "Range": counts.index.astype(str),
+            "Range": labels,
             "% of countries": pct.values,
             "Countries (count)": counts.values,
         })
