@@ -1,6 +1,8 @@
-import streamlit as st
-from main import EnvironmentalData
+# To run this Streamlit app from the project root use: python -m streamlit run app/streamlit_app.py
 
+import streamlit as st
+
+from main import EnvironmentalData    
 from app.plots_map import build_map_figure, nice_label
 from app.plots_charts import build_chart_figure
 
