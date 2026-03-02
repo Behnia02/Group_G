@@ -65,6 +65,9 @@ def build_map_figure(gdf, selected_indicator: str):
     def make_value_text(v):
         if pd.isna(v):
             return "No data"
+        # Format with thousands separators for large numbers
+        if unit == "ha":
+            return f"{v:,.0f}{unit}"
         return f"{v:.1f}{unit}" if unit else f"{v:.1f}"
 
     map_df["value_text"] = map_df[selected_indicator].apply(make_value_text)

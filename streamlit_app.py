@@ -1,25 +1,12 @@
-import json
 import streamlit as st
-import pandas as pd
-import plotly.graph_objects as go
-import plotly.express as px
-
 from main import EnvironmentalData
+
+from app.plots_map import build_map_figure, nice_label
+from app.plots_charts import build_chart_figure
 
 st.set_page_config(page_title="Project Okavango", layout="wide")
 
 st.title("Project Okavango")
-
-DISPLAY_TITLES = {
-    "land_protected": "Share of Protected Land",
-    "annual_deforestation": "Annual Deforestation",
-    "mountain_ecosystems": "Protected Mountain Biodiversity",
-    "forest_area_change": "Change in Forest Area",
-    "land_degraded": "Share of Degraded Land",
-}
-
-def pretty_label(indicator_key: str) -> str:
-    return DISPLAY_TITLES.get(indicator_key, indicator_key.replace("_", " ").title())
 
 @st.cache_resource
 def load_data() -> EnvironmentalData:
@@ -40,7 +27,7 @@ indicators = data.get_available_indicators()
 selected_indicator = st.sidebar.selectbox(
     "Select Indicator",
     indicators,
-    format_func=pretty_label
+    format_func=nice_label
 )
 
 # ----------------------------
@@ -66,13 +53,30 @@ selected_year = st.sidebar.select_slider(
 
 with st.spinner("Loading data..."):
     gdf = data.get_geodata(selected_indicator, selected_year)
-    top_bottom_df = data.get_top_bottom(selected_indicator, selected_year)
 
 # ----------------------------
 # MAP SECTION
 # ----------------------------
 
+st.subheader(f"{nice_label(selected_indicator)} ({selected_year})")
+
+try:
+    fig_map, caption = build_map_figure(gdf, selected_indicator)
+    st.plotly_chart(fig_map, use_container_width=True)
+    st.caption(caption)
+except ValueError as e:
+    st.warning(str(e))
+    st.stop()
+
 
 # ----------------------------
 # GRAPHS BELOW THE MAP
 # ----------------------------
+
+fig_chart, title_or_msg = build_chart_figure(gdf, selected_indicator, selected_year)
+
+if fig_chart is None:
+    st.warning(title_or_msg)
+else:
+    st.subheader(title_or_msg)
+    st.plotly_chart(fig_chart, use_container_width=True)

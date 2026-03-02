@@ -21,7 +21,7 @@ UNITS = {
 }
 
 # Convert internal indicator key into a nice label
-def pretty_label(indicator_key: str) -> str:
+def nice_label(indicator_key: str) -> str:
     return DISPLAY_TITLES.get(indicator_key, indicator_key.replace("_", " ").title())
 
 # Return the unit for a given indicator (or empty string if not defined)
@@ -42,7 +42,7 @@ def build_chart_figure(df_all: pd.DataFrame, selected_indicator: str, selected_y
 
     # 1) Land protected and mountain ecosystems: distribution histogram (10% bins)
     if selected_indicator in ["land_protected", "mountain_ecosystems"]:
-        title = f"Distribution of Countries by Range: {pretty_label(selected_indicator)} ({selected_year})"
+        title = f"Distribution of Countries by Range: {nice_label(selected_indicator)} ({selected_year})"
 
         # Keep only valid percentage values (0–100) and stop early if there is nothing to plot
         vals = df_all[selected_indicator].dropna().clip(0, 100)
@@ -83,7 +83,7 @@ def build_chart_figure(df_all: pd.DataFrame, selected_indicator: str, selected_y
         fig.update_layout(coloraxis_showscale=False, margin=dict(l=0, r=0, t=10, b=0))
         
         # Set axis titles
-        fig.update_xaxes(title=f"Ranges of {pretty_label(selected_indicator)} (%)")
+        fig.update_xaxes(title=f"Ranges of {nice_label(selected_indicator)} (%)")
         fig.update_yaxes(title="% of countries")
 
         # Customize hover text
@@ -98,7 +98,7 @@ def build_chart_figure(df_all: pd.DataFrame, selected_indicator: str, selected_y
 
     # 2) Deforestation: magnitude bins histogram
     if selected_indicator == "annual_deforestation":
-        title = f"Distribution of Countries by Range: {pretty_label(selected_indicator)} ({selected_year})"
+        title = f"Distribution of Countries by Range: {nice_label(selected_indicator)} ({selected_year})"
 
         # Keep only non-missing deforestation values
         vals = df_all[selected_indicator].dropna()
@@ -138,7 +138,7 @@ def build_chart_figure(df_all: pd.DataFrame, selected_indicator: str, selected_y
         fig.update_layout(coloraxis_showscale=False, margin=dict(l=0, r=0, t=10, b=0))
 
         # Set axis titles
-        fig.update_xaxes(title=f"Ranges of {pretty_label(selected_indicator)} (ha)")
+        fig.update_xaxes(title=f"Ranges of {nice_label(selected_indicator)} (ha)")
         fig.update_yaxes(title="% of countries")
 
         # Customize hover text
@@ -153,7 +153,7 @@ def build_chart_figure(df_all: pd.DataFrame, selected_indicator: str, selected_y
 
     # 3) Forest area change: top 5 & bottom 5
     if selected_indicator == "forest_area_change":
-        title = f"Top 5 & Bottom 5 Countries: {pretty_label(selected_indicator)} ({selected_year})"
+        title = f"Top 5 & Bottom 5 Countries: {nice_label(selected_indicator)} ({selected_year})"
 
         # Drop rows with missing values
         tmp = df_all.dropna(subset=[selected_indicator])
@@ -204,7 +204,7 @@ def build_chart_figure(df_all: pd.DataFrame, selected_indicator: str, selected_y
         return fig, title
 
     # 4) Degraded land: top 5 and bottom 5
-    title = f"Top 5 & Bottom 5 Countries: {pretty_label(selected_indicator)} ({selected_year})"
+    title = f"Top 5 & Bottom 5 Countries: {nice_label(selected_indicator)} ({selected_year})"
 
     # Drop rows with missing values
     tmp = df_all.dropna(subset=[selected_indicator])
@@ -215,6 +215,12 @@ def build_chart_figure(df_all: pd.DataFrame, selected_indicator: str, selected_y
     top = tmp.nlargest(5, selected_indicator)
     bottom = tmp.nsmallest(5, selected_indicator)
 
+    # Choose a stable identifier to avoid duplicates (prefer ISO code when available)
+    key = "Code" if "Code" in tmp.columns else "Entity"
+
+    # Avoid overlap (same country showing in both top and bottom)
+    bottom = bottom[~bottom[key].isin(top[key])]
+    
     # Combine top and bottom into one dataframe
     plot_df = (
         pd.concat([top, bottom], ignore_index=True)
@@ -231,7 +237,7 @@ def build_chart_figure(df_all: pd.DataFrame, selected_indicator: str, selected_y
     plot_df["value_text"] = plot_df[selected_indicator].apply(lambda v: f"{v:.1f}{unit}" if unit else f"{v:.1f}")
 
     # Build a x-axis label, including the unit in parentheses
-    x_label = f"{pretty_label(selected_indicator)} ({unit})" if unit else pretty_label(selected_indicator)
+    x_label = f"{nice_label(selected_indicator)} ({unit})" if unit else nice_label(selected_indicator)
 
     # Create the bar chart
     fig = px.bar(
@@ -256,7 +262,7 @@ def build_chart_figure(df_all: pd.DataFrame, selected_indicator: str, selected_y
     fig.update_traces(
         hovertemplate=(
             "<b>%{y}</b> (%{customdata[0]})<br>"
-            f"{pretty_label(selected_indicator)}: %{{customdata[1]}}<extra></extra>"
+            f"{nice_label(selected_indicator)}: %{{customdata[1]}}<extra></extra>"
         )
     )
     return fig, title
