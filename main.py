@@ -11,6 +11,7 @@ from app.data_download import download_datasets
 from app.map_merge import (
     clean_datasets,
     merge_cleaned_datasets,
+    add_iso_a3_clean,
     merge_map_with_panel,
 )
 
@@ -52,7 +53,10 @@ class EnvironmentalData:
         # Step 5 — Load world map
         self.world: gpd.GeoDataFrame = self._load_world_map()
 
-        # Step 6 — Merge map with panel
+        # Step 6 — Add cleaned ISO key for reliable merging
+        self.world = add_iso_a3_clean(self.world)
+
+        # Step 7 — Merge map with panel
         self.geo_panel: gpd.GeoDataFrame = merge_map_with_panel(
             self.world,
             self.panel_df,
@@ -109,25 +113,11 @@ class EnvironmentalData:
 
         return pd.concat([top, bottom])
     
-    def get_available_years(self, indicator: str) -> List[int]:
-        if indicator not in self.panel_df.columns:
-            return []
+if __name__ == "__main__":
+    env = EnvironmentalData()
 
-        years = (
-            self.panel_df.loc[
-                self.panel_df[indicator].notna(),
-                "Year"
-            ]
-            .unique()
-        )
+    print("Available indicators:")
+    print(env.get_available_indicators())
 
-        return sorted(years)
-
-
-    def get_geodata(self, indicator: str, year: int) -> gpd.GeoDataFrame:
-        gdf = self.geo_panel[self.geo_panel["Year"] == year].copy()
-
-        if indicator not in gdf.columns:
-            return gdf.iloc[0:0]
-
-        return gdf
+    print("\nGeo panel preview:")
+    print(env.get_geo_data().head())

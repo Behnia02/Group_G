@@ -61,44 +61,58 @@ def merge_cleaned_datasets(cleaned_datasets: dict[str, pd.DataFrame]) -> pd.Data
     panel = reduce(_merge, frames)
     panel = panel.sort_values(["Code", "Year"]).reset_index(drop=True)
     return panel
-    
+
+# Create a function in which we add the cleaned ISO_A3 column to the world map dataset.
+def add_iso_a3_clean(world: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Return a copy of `world` with a cleaned ISO3 join key column `ISO_A3_CLEAN`."""
+    world_copy = world.copy()
+
+    if "ISO_A3" not in world_copy.columns:
+        raise KeyError("world missing required column 'ISO_A3'")
+
+    world_copy["ISO_A3_CLEAN"] = world_copy["ISO_A3"].astype(str)
+
+    # Replace Natural Earth placeholder -99 with ADM0_A3 if available
+    if "ADM0_A3" in world_copy.columns:
+        mask = world_copy["ISO_A3_CLEAN"] == "-99"
+        world_copy.loc[mask, "ISO_A3_CLEAN"] = world_copy.loc[mask, "ADM0_A3"].astype(str)
+
+    return world_copy   
 
 # Define the final function to merge the map with the panel dataset. This function will take the cleaned panel dataset and the world map dataset and merge them on the country code.
 def merge_map_with_panel(
     world: gpd.GeoDataFrame,
     panel_df: pd.DataFrame,
-    map_key: str = "ISO_A3",  # After testing, we found that the ISO_A3 column in the world map dataset contains the 3-letter country codes that match the "Code" column in our panel dataset the most, so we will use that as the default map_key for merging.
+    map_key: str = "ISO_A3_CLEAN",
 ) -> gpd.GeoDataFrame:
-
-    # Validate required structure (fail fast with a clear error message).
+    
+    # Validate required structure (fail fast with a clear error message) 
     required_cols = {"Code", "Year"}
     missing_cols = required_cols - set(panel_df.columns)
     if missing_cols:
-        raise ValueError(f"panel_df missing required columns: {sorted(missing_cols)}")
+        raise ValueError(
+            f"panel_df missing required columns: {sorted(missing_cols)}"
+        )
 
     if map_key not in world.columns:
-        raise KeyError(f"world does not contain map_key column '{map_key}'")
+        raise KeyError(
+            f"world does not contain map_key column '{map_key}'"
+        )
 
     # Work on copies to keep function safer to reuse and easier to test.
     world_copy = world.copy()
     panel_copy = panel_df.copy()
 
-    # Normalize join key types to ensure consistent matching during merge.
+    # Normalize join key types to ensure consistent matching during merge 
     world_copy[map_key] = world_copy[map_key].astype(str)
     panel_copy["Code"] = panel_copy["Code"].astype(str)
 
-    # Normalize known Natural Earth placeholder codes or NaN placeholders (e.g. '-99') to ensure they don't interfere with merges.
-    world_copy.loc[world_copy[map_key] == "-99", map_key] = pd.NA
-
-    # Merge with the map on the left to preserve geometries.
+    #  Merge with the map on the left to preserve geometries 
     merged = world_copy.merge(
         panel_copy,
         how="left",
-        left_on=map_key,  # Represents the column "ISO_A3" from the map
-        right_on="Code",
+        left_on=map_key,   # Cleaned ISO3 version in the map
+        right_on="Code",  
     )
-
-    # Ensure the result is a GeoDataFrame with correct geometry.
+    # Ensure the result is a GeoDataFrame with correct geometry
     return gpd.GeoDataFrame(merged, geometry="geometry", crs=world.crs)
-
-
