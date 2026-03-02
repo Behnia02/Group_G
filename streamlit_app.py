@@ -72,110 +72,6 @@ with st.spinner("Loading data..."):
 # MAP SECTION
 # ----------------------------
 
-# Title for the selected indicator/year
-st.subheader(f"{pretty_label(selected_indicator)} ({selected_year})")
-
-# Basic checks so the app doesn't crash
-if gdf.empty or selected_indicator not in gdf.columns:
-    st.warning("No data available for this selection.")
-    st.stop()
-
-if "geometry" not in gdf.columns:
-    st.error("Geometry missing.")
-    st.stop()
-
-# Pick the ISO-3 id column (to match rows to country shapes)
-if "ISO_A3" in gdf.columns:
-    id_col = "ISO_A3"
-elif "Code" in gdf.columns:
-    id_col = "Code"
-else:
-    st.error("Missing ISO-3 country code column (expected ISO_A3 or Code).")
-    st.stop()
-
-# Keep only the columns needed to build the map
-map_df = gdf[[id_col, "Entity", selected_indicator, "geometry"]].dropna(subset=[id_col]).copy() 
-map_df[selected_indicator] = pd.to_numeric(map_df[selected_indicator], errors="coerce")
-
-# Units shown in the colorbar
-UNITS = {
-    "land_protected": "%",
-    "land_degraded": "%",
-    "mountain_ecosystems": "%",
-    "annual_deforestation": "ha",
-    "forest_area_change": "ha",
-}
-
-unit = UNITS.get(selected_indicator, "")
-legend_title = f"{pretty_label(selected_indicator)} ({unit})" if unit else pretty_label(selected_indicator)
-
-# Text shown on hover: value + unit, or "No data"
-def make_value_text(v):
-    if pd.isna(v):
-        return "No data"
-    return f"{v:.1f}{unit}" if unit else f"{v:.1f}"
-
-map_df["value_text"] = map_df[selected_indicator].apply(make_value_text)
-
-# Convert geometries to GeoJSON so Plotly can draw the country shapes
-geojson = json.loads(map_df.to_json())
-
-# Split into missing vs non-missing (so we can color missing values in grey)
-missing_df = map_df[map_df[selected_indicator].isna()]
-value_df = map_df[map_df[selected_indicator].notna()]
-
-fig_map = go.Figure()
-
-# Layer 1: missing values (grey)
-if not missing_df.empty:
-    fig_map.add_trace(
-        go.Choropleth(
-            geojson=geojson,
-            locations=missing_df[id_col],
-            featureidkey=f"properties.{id_col}",
-            z=[0] * len(missing_df),  # dummy values just to draw the shapes
-            colorscale=[[0, "lightgrey"], [1, "lightgrey"]],
-            showscale=False,
-            marker_line_color="black",
-            marker_line_width=0.6,
-            hovertext=missing_df["Entity"],
-            customdata=missing_df[["value_text"]],
-            hovertemplate=(
-                "<b>%{hovertext}</b><br>"
-                f"{pretty_label(selected_indicator)}: %{{customdata[0]}}"
-                "<extra></extra>"
-            ),
-        )
-    )
-
-# Layer 2: real values (viridis)
-if not value_df.empty:
-    fig_map.add_trace(
-        go.Choropleth(
-            geojson=geojson,
-            locations=value_df[id_col],
-            featureidkey=f"properties.{id_col}",
-            z=value_df[selected_indicator],
-            colorscale="Viridis",
-            colorbar=dict(title=dict(text=legend_title, side="right"), len=0.9),
-            marker_line_color="black",
-            marker_line_width=0.6,
-            hovertext=value_df["Entity"],
-            customdata=value_df[["value_text"]],
-            hovertemplate=(
-                "<b>%{hovertext}</b><br>"
-                f"{pretty_label(selected_indicator)}: %{{customdata[0]}}"
-                "<extra></extra>"
-            ),
-        )
-    )
-
-# Fit map nicely and remove background/axes
-fig_map.update_geos(fitbounds="locations", visible=False)
-fig_map.update_layout(height=350, margin=dict(l=0, r=0, t=10, b=0))
-
-st.plotly_chart(fig_map, use_container_width=True)
-st.caption("Grey countries indicate missing data for the selected indicator and year.")
 
 # ----------------------------
 # GRAPHS BELOW THE MAP
@@ -192,7 +88,7 @@ if selected_indicator not in df_all.columns:
 df_all[selected_indicator] = pd.to_numeric(df_all[selected_indicator], errors="coerce")
 
 # ----------------------------
-# 1) % LAND PROTECTED AND MOUNTAIN ECOSYSTEMS -> DISTRIBUTION (HISTOGRAM BY 10% BINS)
+# 1) LAND PROTECTED AND MOUNTAIN ECOSYSTEMS -> DISTRIBUTION (HISTOGRAM BY 10% BINS)
 # ----------------------------
 if selected_indicator in ["land_protected", "mountain_ecosystems"]:
     st.subheader(f"Distribution of Countries by Range: {pretty_label(selected_indicator)} ({selected_year})")
@@ -362,7 +258,7 @@ elif selected_indicator == "forest_area_change":
         st.plotly_chart(fig, use_container_width=True)
 
 # ----------------------------
-# 4) DEFAULT -> TOP 5 + BOTTOM 5 (USED FOR DEGRADED LAND)
+# 4) DEGRADED LAND -> TOP 5 + BOTTOM 5 
 # ----------------------------
 else:
     st.subheader(f"Top 5 & Bottom 5 Countries: {pretty_label(selected_indicator)} ({selected_year})")
