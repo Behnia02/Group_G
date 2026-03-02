@@ -1,4 +1,5 @@
 # Builds the Plotly choropleth map figure for the Streamlit app
+
 import json
 import pandas as pd
 import plotly.graph_objects as go
