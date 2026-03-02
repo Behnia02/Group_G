@@ -33,11 +33,13 @@ def get_unit(indicator_key: str) -> str:
 
 # Pick an ISO-3 identifier column from the GeoDataFrame
 def _pick_id_col(gdf) -> str:
+    if "ISO_A3_CLEAN" in gdf.columns:
+        return "ISO_A3_CLEAN"
     if "ISO_A3" in gdf.columns:
         return "ISO_A3"
     if "Code" in gdf.columns:
         return "Code"
-    raise ValueError("Missing ISO-3 country code column (expected ISO_A3 or Code).")
+    raise ValueError("Missing ISO-3 country code column (expected ISO_A3_CLEAN, ISO_A3 or Code).")
 
 # Build a choropleth map with two layers: missing values (grey) and real values (Viridis)
 def build_map_figure(gdf, selected_indicator: str):

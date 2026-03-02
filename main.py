@@ -112,6 +112,28 @@ class EnvironmentalData:
         bottom = df.nsmallest(n, indicator)
 
         return pd.concat([top, bottom])
+
+    def get_available_years(self, indicator: str) -> List[int]:
+        if indicator not in self.panel_df.columns:
+            return []
+
+        years = (
+            self.panel_df.loc[
+                self.panel_df[indicator].notna(),
+                "Year"
+            ]
+            .unique()
+        )
+
+        return sorted(years)
+
+    def get_geodata(self, indicator: str, year: int) -> gpd.GeoDataFrame:
+        gdf = self.geo_panel[self.geo_panel["Year"] == year].copy()
+
+        if indicator not in gdf.columns:
+            return gdf.iloc[0:0]
+
+        return gdf
     
 if __name__ == "__main__":
     env = EnvironmentalData()
