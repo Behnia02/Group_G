@@ -7,10 +7,11 @@ from typing import Dict, List
 import pandas as pd
 import geopandas as gpd
 
-from data_download import download_datasets
-from map_merge import (
+from app.data_download import download_datasets
+from app.map_merge import (
     clean_datasets,
     merge_cleaned_datasets,
+    add_iso_a3_clean,
     merge_map_with_panel,
 )
 
@@ -52,7 +53,10 @@ class EnvironmentalData:
         # Step 5 — Load world map
         self.world: gpd.GeoDataFrame = self._load_world_map()
 
-        # Step 6 — Merge map with panel
+        # Step 6 — Add cleaned ISO key for reliable merging
+        self.world = add_iso_a3_clean(self.world)
+
+        # Step 7 — Merge map with panel
         self.geo_panel: gpd.GeoDataFrame = merge_map_with_panel(
             self.world,
             self.panel_df,
@@ -108,3 +112,12 @@ class EnvironmentalData:
         bottom = df.nsmallest(n, indicator)
 
         return pd.concat([top, bottom])
+    
+if __name__ == "__main__":
+    env = EnvironmentalData()
+
+    print("Available indicators:")
+    print(env.get_available_indicators())
+
+    print("\nGeo panel preview:")
+    print(env.get_geo_data().head())
