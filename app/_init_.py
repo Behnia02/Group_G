@@ -60,7 +60,6 @@ class EnvironmentalData:
 
     # -----------------------------
     # Private helpers
-    # -----------------------------
 
     def _load_raw_datasets(self) -> Dict[str, pd.DataFrame]:
         datasets: Dict[str, pd.DataFrame] = {}
@@ -82,9 +81,7 @@ class EnvironmentalData:
         zip_path = Path(self.download_dir) / "world_map.zip"
         return gpd.read_file(zip_path)
 
-    # -----------------------------
     # Public methods (for Streamlit)
-    # -----------------------------
 
     def get_available_indicators(self) -> List[str]:
         return list(self.cleaned_datasets.keys())
