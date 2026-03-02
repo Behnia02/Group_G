@@ -52,7 +52,7 @@ def test_merge_cleaned_datasets_basic():
 def test_merge_map_with_panel_basic():
     world = gpd.GeoDataFrame(
         {
-            "ISO_A3": ["DEU"],
+            "ISO_A3_CLEAN": ["DEU"],
             "geometry": [Point(10, 50)],
         },
         crs="EPSG:4326",
