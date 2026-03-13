@@ -1,76 +1,86 @@
-# To run this Streamlit app from the project root use: python -m streamlit run streamlit_app.py
- 
+# To run this Streamlit app from the project root use:
+# python -m streamlit run app/streamlit_app.py
+
 import streamlit as st
-from main import EnvironmentalData
-from app.plots_map import build_map_figure, nice_label
-from app.plots_charts import build_chart_figure
- 
+from project_class import EnvironmentalData
+from plots_map import build_map_figure, nice_label
+from plots_charts import build_chart_figure
+from ai_workflow import render_ai_workflow
+
 # Page config
- 
 st.set_page_config(
     page_title="Project Okavango",
     page_icon="🌿",
     layout="wide",
     initial_sidebar_state="expanded",
 )
- 
+
 # Custom CSS
- 
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;1,400&family=Inter:wght@300;400;500&display=swap');
- 
+
     html, body, [class*="css"] {
         font-family: 'Inter', sans-serif;
     }
- 
+
     .stApp { background-color: #f7f7f5; }
     [data-testid="stAppViewContainer"] > .main { background-color: #f7f7f5; }
     [data-testid="block-container"] { background-color: #f7f7f5; padding-top: 2rem; }
- 
+
     [data-testid="stSidebar"] {
         background-color: #ffffff;
         border-right: 0.5px solid #e0ddd6;
     }
+
+    [data-testid="stSidebarNav"] {
+        display: none;
+    }
+
     [data-testid="stSidebar"] p,
     [data-testid="stSidebar"] span,
     [data-testid="stSidebar"] label,
     [data-testid="stSidebar"] .stMarkdown { color: #555550 !important; }
+
     [data-testid="stSidebar"] .stSelectbox label,
-    [data-testid="stSidebar"] .stSlider label {
+    [data-testid="stSidebar"] .stSlider label,
+    [data-testid="stSidebar"] .stRadio label {
         color: #888880 !important;
         font-size: 0.72rem;
         font-weight: 500;
         letter-spacing: 0.08em;
         text-transform: uppercase;
     }
+
     [data-testid="stSidebar"] .stSelectbox > div > div {
         background-color: #f7f7f5;
         border: 0.5px solid #d0cdc6;
         color: #222220 !important;
         border-radius: 6px;
     }
+
     [data-testid="stSidebar"] .streamlit-expanderHeader {
         color: #555550 !important;
         background-color: #f7f7f5;
         border: 0.5px solid #e0ddd6;
         border-radius: 6px;
     }
+
     [data-testid="stSidebar"] .streamlit-expanderContent {
         background-color: #f7f7f5;
         border: 0.5px solid #e0ddd6;
         border-top: none;
     }
- 
+
     .okavango-hero {
         background-color: #ffffff;
         border-radius: 12px;
         padding: 2rem 2.5rem;
         margin-bottom: 1.5rem;
-        border-left: 3px solid #2d6a4f;
         border: 0.5px solid #e0ddd6;
         border-left: 3px solid #2d6a4f;
     }
+
     .okavango-hero h1 {
         font-family: 'Lora', serif;
         font-size: 2.2rem;
@@ -78,9 +88,16 @@ st.markdown("""
         margin: 0 0 0.3rem 0;
         letter-spacing: -0.3px;
     }
-    .okavango-hero p { color: #888880; font-size: 0.9rem; font-weight: 300; margin: 0; }
- 
+
+    .okavango-hero p {
+        color: #888880;
+        font-size: 1.15rem;
+        font-weight: 300;
+        margin: 0;
+    }
+
     .kpi-row { display: flex; gap: 1rem; margin-bottom: 1.5rem; }
+
     .kpi-card {
         flex: 1;
         background: #ffffff;
@@ -88,61 +105,94 @@ st.markdown("""
         border-radius: 10px;
         padding: 1rem 1.2rem;
     }
+
     .kpi-label {
-        font-size: 0.7rem; font-weight: 500; letter-spacing: 0.08em;
-        text-transform: uppercase; color: #888880; margin-bottom: 0.3rem;
+        font-size: 0.7rem;
+        font-weight: 500;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #888880;
+        margin-bottom: 0.3rem;
     }
-    .kpi-value { font-family: 'Lora', serif; font-size: 1.5rem; color: #1a1a18; line-height: 1.1; }
-    .kpi-sub { font-size: 0.75rem; color: #aaa; margin-top: 0.2rem; }
- 
+
+    .kpi-value {
+        font-family: 'Lora', serif;
+        font-size: 1.5rem;
+        color: #1a1a18;
+        line-height: 1.1;
+    }
+
+    .kpi-sub {
+        font-size: 0.75rem;
+        color: #aaa;
+        margin-top: 0.2rem;
+    }
+
     .section-header {
         font-family: 'Lora', serif;
-        font-size: 1.2rem; color: #1a1a18;
+        font-size: 1.2rem;
+        color: #1a1a18;
         border-bottom: 0.5px solid #e0ddd6;
-        padding-bottom: 0.5rem; margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        margin-bottom: 1rem;
     }
- 
+
     .stPlotlyChart {
         background-color: #ffffff;
         border-radius: 10px;
         border: 0.5px solid #e0ddd6;
         padding: 0.5rem;
     }
- 
+
     hr { border-color: #e0ddd6 !important; }
     .stCaption, [data-testid="stCaptionContainer"] { color: #aaa !important; }
     [data-testid="stSpinner"] p { color: #555550; }
     #MainMenu { visibility: hidden; }
     footer { visibility: hidden; }
-    header[data-testid="stHeader"] { background-color: #f7f7f5; border-bottom: 0.5px solid #e0ddd6; }
+
+    header[data-testid="stHeader"] {
+        background-color: #f7f7f5;
+        border-bottom: 0.5px solid #e0ddd6;
+    }
 </style>
 """, unsafe_allow_html=True)
- 
+
 # Data loading
- 
 @st.cache_resource(show_spinner="Initialising data pipeline…")
 def load_data() -> EnvironmentalData:
     return EnvironmentalData()
- 
+
 data = load_data()
- 
-# Sidebar
- 
-# Add/edit descriptions to match your actual indicator names from get_available_indicators()
-INDICATOR_DESCRIPTIONS = {
-    "annual_deforestation":  "Total forest area lost per year (hectares). Does not account for reforestation.",
-    "forest_area_change":    "Net annual change in forest area (hectares). Negative values mean net forest loss.",
-    "land_degraded":         "Percentage of total land area classified as degraded due to human or natural causes.",
-    "land_protected":        "Percentage of total land area under formal protection (national parks, reserves, etc.).",
-    "mountain_ecosystems":   "Percentage of mountain area covered by protected biodiversity zones.",
-}
- 
+
+# App-level navigation state
+if "current_view" not in st.session_state:
+    st.session_state.current_view = "Environmental Explorer"
+
+# Sidebar navigation first
 with st.sidebar:
     st.markdown("### 🧭 Navigation")
-    if st.button("Go to AI Workflow"):
-        st.switch_page("pages/2_AI_Workflow.py")
+    current_view = st.radio(
+        "Go to",
+        ["Environmental Explorer", "AI Workflow"],
+        key="current_view",
+    )
     st.divider()
 
+# If AI Workflow is selected, render it and stop here
+if current_view == "AI Workflow":
+    render_ai_workflow()
+    st.stop()
+
+# Sidebar content for Environmental Explorer
+INDICATOR_DESCRIPTIONS = {
+    "annual_deforestation": "Total forest area lost per year (hectares). Does not account for reforestation.",
+    "forest_area_change": "Net annual change in forest area (hectares). Negative values mean net forest loss.",
+    "land_degraded": "Percentage of total land area classified as degraded due to human or natural causes.",
+    "land_protected": "Percentage of total land area under formal protection (national parks, reserves, etc.).",
+    "mountain_ecosystems": "Percentage of mountain area covered by protected biodiversity zones.",
+}
+
+with st.sidebar:
     st.markdown("### 🌿 Filters")
     st.caption("Select an indicator and year to update the map and chart.")
     st.divider()
@@ -186,12 +236,7 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-st.page_link(
-    "pages/2_AI_Workflow.py",
-    label="Open Page 2 · AI Workflow",
-    icon="🛰️",
-)
-st.caption("Select latitude, longitude, and zoom for the image-based workflow.")
+st.caption("Use the sidebar navigation to switch to the AI Workflow view.")
 
 st.divider()
 
