@@ -4,6 +4,7 @@ import pandas as pd
 import pydeck as pdk
 import requests
 import streamlit as st
+from country_state_city import City, Country, State
 
 
 def render_ai_workflow():
@@ -88,32 +89,109 @@ def render_ai_workflow():
         return cleaned if cleaned else fallback
 
     @st.cache_data(show_spinner=False)
-    def get_country_list() -> list[str]:
-        fallback = [
-            "Australia", "Botswana", "Brazil", "Canada", "China", "France", "Germany",
-            "India", "Italy", "Japan", "Portugal", "Spain", "United Kingdom",
-            "United States"
-        ]
+    def get_country_list() -> list:
+        try:
+            countries = Country.get_countries()
+            return sorted(countries, key=lambda x: x.name)
+        except Exception:
+            return []
+
+    @st.cache_data(show_spinner=False)
+    def get_country_names() -> list[str]:
+        return [safe_text(c.name, fallback="") for c in get_country_list() if safe_text(c.name, fallback="")]
+
+    @st.cache_data(show_spinner=False)
+    def get_country_code(country_name: str):
+        for country in get_country_list():
+            if safe_text(country.name, fallback="") == country_name:
+                return country.iso2
+        return None
+
+    @st.cache_data(show_spinner=False)
+    def get_regions_for_country(country_name: str) -> list:
+        country_code = get_country_code(country_name)
+        if not country_code:
+            return []
 
         try:
-            response = requests.get(
-                "https://restcountries.com/v3.1/all?fields=name",
-                timeout=10,
-            )
-            response.raise_for_status()
-            data = response.json()
-
-            countries = []
-            for item in data:
-                name = item.get("name", {}).get("common", "")
-                name = safe_text(name, fallback="")
-                if name:
-                    countries.append(name)
-
-            countries = sorted(set(countries))
-            return countries if countries else fallback
+            states = State.get_states_of_country(country_code)
+            return sorted(states, key=lambda x: x.name)
         except Exception:
-            return fallback
+            return []
+
+    @st.cache_data(show_spinner=False)
+    def get_region_names(country_name: str) -> list[str]:
+        return [
+            safe_text(s.name, fallback="")
+            for s in get_regions_for_country(country_name)
+            if safe_text(s.name, fallback="")
+        ]
+
+    @st.cache_data(show_spinner=False)
+    def get_region_code(country_name: str, region_name: str):
+        for state in get_regions_for_country(country_name):
+            if safe_text(state.name, fallback="") == region_name:
+                return state.iso_code
+        return None
+
+    @st.cache_data(show_spinner=False)
+    def get_cities_for_country_region(country_name: str, region_name: str) -> list:
+        country_code = get_country_code(country_name)
+        region_code = get_region_code(country_name, region_name)
+
+        if not country_code or not region_code:
+            return []
+
+        try:
+            cities = City.get_cities_of_state(country_code, region_code)
+            return sorted(cities, key=lambda x: x.name)
+        except Exception:
+            return []
+
+    @st.cache_data(show_spinner=False)
+    def get_city_names(country_name: str, region_name: str) -> list[str]:
+        names = []
+        seen = set()
+
+        for city in get_cities_for_country_region(country_name, region_name):
+            city_name = safe_text(city.name, fallback="")
+            if city_name and city_name not in seen:
+                seen.add(city_name)
+                names.append(city_name)
+
+        return names
+
+    @st.cache_data(show_spinner=False)
+    def geocode_place(country: str, region: str, city: str) -> tuple[float | None, float | None]:
+        query_parts = [city.strip(), region.strip(), country.strip()]
+        query = ", ".join(part for part in query_parts if part)
+
+        if not query:
+            return None, None
+
+        url = "https://nominatim.openstreetmap.org/search"
+        params = {
+            "q": query,
+            "format": "jsonv2",
+            "limit": 1,
+            "accept-language": "en",
+        }
+        headers = {
+            "User-Agent": "ProjectOkavango/1.0 (student project)",
+            "Accept-Language": "en",
+        }
+
+        try:
+            response = requests.get(url, params=params, headers=headers, timeout=10)
+            response.raise_for_status()
+            results = response.json()
+
+            if not results:
+                return None, None
+
+            return float(results[0]["lat"]), float(results[0]["lon"])
+        except Exception:
+            return None, None
 
     @st.cache_data(show_spinner=False)
     def reverse_geocode(lat: float, lon: float) -> tuple[str, str]:
@@ -150,94 +228,25 @@ def render_ai_workflow():
         except Exception:
             return "Unknown", "Unknown"
 
-    @st.cache_data(show_spinner=False)
-    def search_places(country: str, city_query: str, region_query: str = "") -> list[dict]:
-        query_parts = [city_query.strip(), region_query.strip(), country.strip()]
-        query = ", ".join(part for part in query_parts if part)
-
-        if not query:
-            return []
-
-        url = "https://nominatim.openstreetmap.org/search"
-        params = {
-            "q": query,
-            "format": "jsonv2",
-            "addressdetails": 1,
-            "limit": 10,
-            "accept-language": "en",
-        }
-        headers = {
-            "User-Agent": "ProjectOkavango/1.0 (student project)",
-            "Accept-Language": "en",
-        }
-
-        try:
-            response = requests.get(url, params=params, headers=headers, timeout=10)
-            response.raise_for_status()
-            results = response.json()
-
-            places = []
-            for item in results:
-                address = item.get("address", {})
-
-                found_country = safe_text(address.get("country", country))
-                found_region = safe_text(
-                    address.get("state")
-                    or address.get("region")
-                    or address.get("county")
-                    or ""
-                )
-                found_city = safe_text(
-                    address.get("city")
-                    or address.get("town")
-                    or address.get("village")
-                    or address.get("municipality")
-                    or city_query
-                )
-
-                label_parts = [found_city]
-                if found_region and found_region != found_city:
-                    label_parts.append(found_region)
-                if found_country:
-                    label_parts.append(found_country)
-
-                places.append({
-                    "label": " | ".join(part for part in label_parts if part),
-                    "latitude": float(item["lat"]),
-                    "longitude": float(item["lon"]),
-                    "country": found_country,
-                    "city": found_city,
-                })
-
-            unique_places = []
-            seen = set()
-            for place in places:
-                key = (
-                    round(place["latitude"], 5),
-                    round(place["longitude"], 5),
-                    place["label"],
-                )
-                if key not in seen:
-                    seen.add(key)
-                    unique_places.append(place)
-
-            return unique_places
-        except Exception:
-            return []
-
-    country_options = get_country_list()
+    country_options = get_country_names()
+    if not country_options:
+        country_options = ["Portugal"]
 
     if "ai_settings" not in st.session_state:
         st.session_state.ai_settings = {
             "latitude": 38.7223,
             "longitude": -9.1393,
             "zoom": 11,
-            "country": "Portugal",
+            "country": "Portugal" if "Portugal" in country_options else country_options[0],
+            "region": "",
             "city": "Lisbon",
         }
 
     if "sync_from_settings" not in st.session_state:
         st.session_state.sync_from_settings = True
+
+    if "location_mode" not in st.session_state:
+        st.session_state.location_mode = "By coordinates"
 
     if (
         "lat_input" not in st.session_state
@@ -245,7 +254,7 @@ def render_ai_workflow():
         or "zoom_input" not in st.session_state
         or "place_country" not in st.session_state
         or "place_region" not in st.session_state
-        or "place_city_query" not in st.session_state
+        or "place_city" not in st.session_state
         or st.session_state.sync_from_settings
     ):
         settings = st.session_state.ai_settings
@@ -259,13 +268,21 @@ def render_ai_workflow():
             default_country = "Portugal" if "Portugal" in country_options else country_options[0]
 
         st.session_state.place_country = default_country
-        st.session_state.place_region = ""
-        st.session_state.place_city_query = "" if settings["city"] == "Unknown" else settings["city"]
 
+        region_options_init = get_region_names(default_country)
+        default_region = settings.get("region", "")
+        if default_region not in region_options_init:
+            default_region = region_options_init[0] if region_options_init else ""
+
+        st.session_state.place_region = default_region
+
+        city_options_init = get_city_names(default_country, default_region) if default_region else []
+        default_city = settings["city"]
+        if default_city not in city_options_init:
+            default_city = city_options_init[0] if city_options_init else ""
+
+        st.session_state.place_city = default_city
         st.session_state.sync_from_settings = False
-
-    if "location_mode" not in st.session_state:
-        st.session_state.location_mode = "By coordinates"
 
     with st.sidebar:
         st.markdown("### 🛰️ AI controls")
@@ -301,6 +318,7 @@ def render_ai_workflow():
                             "longitude": longitude,
                             "zoom": int(st.session_state.zoom_input),
                             "country": country,
+                            "region": st.session_state.ai_settings.get("region", ""),
                             "city": city,
                         }
                         st.session_state.sync_from_settings = True
@@ -309,50 +327,76 @@ def render_ai_workflow():
                     st.error("Latitude and longitude must be valid numbers.")
 
         else:
-            st.selectbox("Country", options=country_options, key="place_country")
-            st.text_input("Region (optional)", key="place_region")
-            st.text_input("City", key="place_city_query")
+            selected_country = st.selectbox(
+                "Country",
+                options=country_options,
+                key="place_country",
+            )
 
-            city_results = []
-            if st.session_state.place_city_query.strip():
-                city_results = search_places(
-                    st.session_state.place_country,
-                    st.session_state.place_city_query,
-                    st.session_state.place_region,
+            region_options = get_region_names(selected_country)
+            if region_options:
+                if st.session_state.place_region not in region_options:
+                    st.session_state.place_region = region_options[0]
+
+                selected_region = st.selectbox(
+                    "Region",
+                    options=region_options,
+                    key="place_region",
                 )
+            else:
+                selected_region = ""
+                st.selectbox("Region", options=["No regions found"], disabled=True)
 
-            if city_results:
-                selected_idx = st.selectbox(
-                    "Choose a location",
-                    options=range(len(city_results)),
-                    format_func=lambda i: city_results[i]["label"],
+            city_options = get_city_names(selected_country, selected_region) if selected_region else []
+            if city_options:
+                if st.session_state.place_city not in city_options:
+                    st.session_state.place_city = city_options[0]
+
+                selected_city = st.selectbox(
+                    "City",
+                    options=city_options,
+                    key="place_city",
                 )
+            else:
+                selected_city = ""
+                st.selectbox("City", options=["No cities found"], disabled=True)
 
-                selected_place = city_results[selected_idx]
+            preview_lat, preview_lon = (None, None)
+            if selected_country and selected_region and selected_city:
+                preview_lat, preview_lon = geocode_place(selected_country, selected_region, selected_city)
 
-                st.text_input("Latitude", value=f"{selected_place['latitude']:.4f}", disabled=True)
-                st.text_input("Longitude", value=f"{selected_place['longitude']:.4f}", disabled=True)
+            st.text_input(
+                "Latitude",
+                value="" if preview_lat is None else f"{preview_lat:.4f}",
+                disabled=True,
+            )
+            st.text_input(
+                "Longitude",
+                value="" if preview_lon is None else f"{preview_lon:.4f}",
+                disabled=True,
+            )
 
-                if st.button("Use selected place", use_container_width=True):
+            if st.button("Use selected place", use_container_width=True):
+                if preview_lat is None or preview_lon is None:
+                    st.error("Could not find coordinates for the selected location.")
+                else:
                     st.session_state.ai_settings = {
-                        "latitude": selected_place["latitude"],
-                        "longitude": selected_place["longitude"],
+                        "latitude": preview_lat,
+                        "longitude": preview_lon,
                         "zoom": int(st.session_state.zoom_input),
-                        "country": selected_place["country"],
-                        "city": selected_place["city"],
+                        "country": selected_country,
+                        "region": selected_region,
+                        "city": selected_city,
                     }
                     st.session_state.sync_from_settings = True
                     st.rerun()
-
-            elif st.session_state.place_city_query.strip():
-                st.info("No city options found for that search.")
 
     settings = st.session_state.ai_settings
 
     st.markdown("""
     <div class="okavango-hero">
         <h1>🛰️ AI Workflow</h1>
-        <p>Select the area using coordinates or by choosing country and city.</p>
+        <p>Select the area using coordinates or by choosing country, region and city.</p>
     </div>
     """, unsafe_allow_html=True)
 
