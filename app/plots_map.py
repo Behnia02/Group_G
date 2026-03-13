@@ -23,6 +23,15 @@ UNITS = {
     "forest_area_change": "ha",
 }
 
+COLORSCALES = {
+    "annual_deforestation": "YlOrRd",
+    "land_degraded":        "YlOrRd",
+    "land_protected":       "Greens",
+    "mountain_ecosystems":  "Greens",
+    "forest_area_change":   "RdYlGn",
+}
+DEFAULT_COLORSCALE = "Blues"
+
 # Convert indicator key into a nice label
 def nice_label(indicator_key: str) -> str:
     return DISPLAY_TITLES.get(indicator_key, indicator_key.replace("_", " ").title())
@@ -41,7 +50,7 @@ def _pick_id_col(gdf) -> str:
         return "Code"
     raise ValueError("Missing ISO-3 country code column (expected ISO_A3_CLEAN, ISO_A3 or Code).")
 
-# Build a choropleth map with two layers: missing values (grey) and real values (Viridis)
+# Build a choropleth map with two layers: missing values (grey) and real values
 def build_map_figure(gdf, selected_indicator: str):
     # Basic checks so the app won't crash
     if gdf is None or len(gdf) == 0:
@@ -56,21 +65,25 @@ def build_map_figure(gdf, selected_indicator: str):
     id_col = _pick_id_col(gdf)
 
     # Keep only the columns needed for the map
-    map_df = gdf[[id_col, "Entity", selected_indicator, "geometry"]].dropna(subset=[id_col]).copy()
+    name_col = next((c for c in ["Entity", "ADMIN", "NAME", "name"] if c in gdf.columns), None)
+    if name_col is None:
+        raise ValueError("No country name column found in GeoDataFrame.")
+
+    map_df = gdf[[id_col, name_col, selected_indicator, "geometry"]].dropna(subset=[id_col]).copy()
+    map_df = map_df.rename(columns={name_col: "Entity"})
     map_df[selected_indicator] = pd.to_numeric(map_df[selected_indicator], errors="coerce")
 
     # Build the legend title, including units when available
     unit = get_unit(selected_indicator)
     legend_title = f"{nice_label(selected_indicator)} ({unit})" if unit else nice_label(selected_indicator)
 
-    # Hover value formatting (value + unit, or "No data")
+    # Hover value formatting
     def make_value_text(v):
         if pd.isna(v):
             return "No data"
-        # Format with thousands separators for large numbers
         if unit == "ha":
-            return f"{v:,.0f}{unit}"
-        return f"{v:.1f}{unit}" if unit else f"{v:.1f}"
+            return f"{v:,.0f} {unit}"
+        return f"{v:.1f} {unit}" if unit else f"{v:.1f}"
 
     map_df["value_text"] = map_df[selected_indicator].apply(make_value_text)
 
@@ -91,7 +104,7 @@ def build_map_figure(gdf, selected_indicator: str):
                 geojson=geojson,
                 locations=missing_df[id_col],
                 featureidkey=f"properties.{id_col}",
-                z=[0] * len(missing_df),  # dummy values, just to color the shapes
+                z=[0] * len(missing_df),
                 colorscale=[[0, "lightgrey"], [1, "lightgrey"]],
                 showscale=False,
                 marker_line_color="black",
@@ -106,7 +119,7 @@ def build_map_figure(gdf, selected_indicator: str):
             )
         )
 
-    # Layer 2: real values (Viridis)
+    # Layer 2: real values
     if not value_df.empty:
         fig_map.add_trace(
             go.Choropleth(
@@ -114,8 +127,14 @@ def build_map_figure(gdf, selected_indicator: str):
                 locations=value_df[id_col],
                 featureidkey=f"properties.{id_col}",
                 z=value_df[selected_indicator],
-                colorscale="Viridis",
-                colorbar=dict(title=dict(text=legend_title, side="right"), len=0.9),
+                colorscale=COLORSCALES.get(selected_indicator, DEFAULT_COLORSCALE),
+                colorbar=dict(
+                    title=dict(text=legend_title, side="right"),
+                    len=0.9,
+                    thickness=18,
+                    x=1.02,
+                    xpad=12,
+                ),
                 marker_line_color="black",
                 marker_line_width=0.6,
                 hovertext=value_df["Entity"],
@@ -129,8 +148,21 @@ def build_map_figure(gdf, selected_indicator: str):
         )
 
     # Fit map nicely and remove background/axes
-    fig_map.update_geos(fitbounds="locations", visible=False)
-    fig_map.update_layout(height=350, margin=dict(l=0, r=0, t=10, b=0))
+    fig_map.update_geos(
+        visible=False,
+        bgcolor="rgba(0,0,0,0)",
+        projection_type="natural earth",
+        lataxis_range=[-60, 85],
+        lonaxis_range=[-180, 180],
+    )
+
+    fig_map.update_layout(
+        height=400,
+        margin=dict(l=0, r=40, t=10, b=0),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font_color="black",
+    )
 
     caption = "Grey countries indicate missing data for the selected indicator and year."
     return fig_map, caption

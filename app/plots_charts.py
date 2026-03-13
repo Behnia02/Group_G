@@ -1,3 +1,12 @@
+COLORSCALES = {
+    "annual_deforestation": "YlOrRd",
+    "land_degraded":        "YlOrRd",
+    "land_protected":       "Greens",
+    "mountain_ecosystems":  "Greens",
+    "forest_area_change":   "RdYlGn",
+}
+DEFAULT_COLORSCALE = "Blues"
+
 # Builds the Plotly chart figure (histograms or top/bottom rankings) for the selected indicator to be used in the Streamlit app
 
 import pandas as pd
@@ -28,8 +37,26 @@ def nice_label(indicator_key: str) -> str:
 def get_unit(indicator_key: str) -> str:
     return UNITS.get(indicator_key, "")
 
+# Shared chart styling
+def apply_chart_layout(fig):
+    fig.update_layout(
+        coloraxis_showscale=False,
+        margin=dict(l=0, r=0, t=10, b=40),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font_color="black",
+        dragmode=False,
+    )
+    return fig
+
 # Build the chart figure for the selected indicator
 def build_chart_figure(df_all: pd.DataFrame, selected_indicator: str, selected_year: int):
+    # Normalize country name column to "Entity"
+    if "Entity" not in df_all.columns:
+        name_col = next((c for c in ["ADMIN", "NAME", "name"] if c in df_all.columns), None)
+        if name_col:
+            df_all = df_all.rename(columns={name_col: "Entity"})
+
     if df_all is None or df_all.empty:
         return None, "No data available for the graph."
 
@@ -42,7 +69,7 @@ def build_chart_figure(df_all: pd.DataFrame, selected_indicator: str, selected_y
 
     # 1) Land protected and mountain ecosystems: distribution histogram (10% bins)
     if selected_indicator in ["land_protected", "mountain_ecosystems"]:
-        title = f"Distribution of Countries by Range: {nice_label(selected_indicator)} ({selected_year})"
+        title = f"Distribution of Countries by Range"
 
         # Keep only valid percentage values (0–100) and stop early if there is nothing to plot
         vals = df_all[selected_indicator].dropna().clip(0, 100)
@@ -52,10 +79,10 @@ def build_chart_figure(df_all: pd.DataFrame, selected_indicator: str, selected_y
         # Create bins: 0–10, 10–20, ..., 90–100
         bins = list(range(0, 110, 10))
 
-        # Create clean labels for each bin 
+        # Create clean labels for each bin
         labels = [f"[{bins[i]}, {bins[i+1]}]" for i in range(len(bins) - 1)]
 
-        # Bin each value into the labeled ranges and count how many countries fall into each bin (keeping all bins in order).
+        # Bin each value into the labeled ranges and count how many countries fall into each bin
         cats = pd.cut(vals, bins=bins, labels=labels, include_lowest=True)
         counts = cats.value_counts().reindex(labels, fill_value=0)
 
@@ -80,16 +107,24 @@ def build_chart_figure(df_all: pd.DataFrame, selected_indicator: str, selected_y
             x="Range",
             y="% of countries",
             color="bin_scaled",
-            color_continuous_scale="Viridis",
+            color_continuous_scale=COLORSCALES.get(selected_indicator, DEFAULT_COLORSCALE),
             custom_data=["Range", "% of countries", "Countries (count)"],
         )
 
-        # Hide the color scale and tighten the chart margins
-        fig.update_layout(coloraxis_showscale=False, margin=dict(l=0, r=0, t=10, b=0))
-        
+        apply_chart_layout(fig)
+
         # Set axis titles
-        fig.update_xaxes(title=f"Ranges of {nice_label(selected_indicator)} (%)")
-        fig.update_yaxes(title="% of countries")
+        fig.update_xaxes(
+            title=f"Ranges of {nice_label(selected_indicator)} (%)",
+            title_standoff=10,
+            tickfont=dict(color="black"),
+            title_font=dict(color="black"),
+        )
+        fig.update_yaxes(
+            title="% of countries",
+            tickfont=dict(color="black"),
+            title_font=dict(color="black"),
+        )
 
         # Customize hover text
         fig.update_traces(
@@ -103,7 +138,7 @@ def build_chart_figure(df_all: pd.DataFrame, selected_indicator: str, selected_y
 
     # 2) Deforestation: magnitude bins histogram
     if selected_indicator == "annual_deforestation":
-        title = f"Distribution of Countries by Range: {nice_label(selected_indicator)} ({selected_year})"
+        title = f"Distribution of Countries by Range"
 
         # Keep only non-missing deforestation values
         vals = df_all[selected_indicator].dropna()
@@ -135,16 +170,24 @@ def build_chart_figure(df_all: pd.DataFrame, selected_indicator: str, selected_y
             x="Range",
             y="% of countries",
             color="bin_level",
-            color_continuous_scale="Viridis",
+            color_continuous_scale=COLORSCALES.get(selected_indicator, DEFAULT_COLORSCALE),
             custom_data=["Range", "% of countries", "Countries (count)"],
         )
 
-        # Hide the color scale and tighten the chart margins
-        fig.update_layout(coloraxis_showscale=False, margin=dict(l=0, r=0, t=10, b=0))
+        apply_chart_layout(fig)
 
         # Set axis titles
-        fig.update_xaxes(title=f"Ranges of {nice_label(selected_indicator)} (ha)")
-        fig.update_yaxes(title="% of countries")
+        fig.update_xaxes(
+            title=f"Ranges of {nice_label(selected_indicator)} (ha)",
+            title_standoff=10,
+            tickfont=dict(color="black"),
+            title_font=dict(color="black"),
+        )
+        fig.update_yaxes(
+            title="% of countries",
+            tickfont=dict(color="black"),
+            title_font=dict(color="black"),
+        )
 
         # Customize hover text
         fig.update_traces(
@@ -158,7 +201,7 @@ def build_chart_figure(df_all: pd.DataFrame, selected_indicator: str, selected_y
 
     # 3) Forest area change: top 5 & bottom 5
     if selected_indicator == "forest_area_change":
-        title = f"Top 5 & Bottom 5 Countries: {nice_label(selected_indicator)} ({selected_year})"
+        title = f"Top 5 & Bottom 5 Countries"
 
         # Drop rows with missing values
         tmp = df_all.dropna(subset=[selected_indicator])
@@ -187,17 +230,27 @@ def build_chart_figure(df_all: pd.DataFrame, selected_indicator: str, selected_y
             y="Entity",
             orientation="h",
             color=selected_indicator,
-            color_continuous_scale="Viridis",
+            color_continuous_scale=COLORSCALES.get(selected_indicator, DEFAULT_COLORSCALE),
             category_orders={"Entity": plot_df["Entity"].tolist()},
             custom_data=["Group", "value_text"],
         )
 
-        # Hide the color scale and tighten the chart margins
-        fig.update_layout(coloraxis_showscale=False, margin=dict(l=0, r=0, t=10, b=0))
+        apply_chart_layout(fig)
 
         # Set axis titles
-        fig.update_xaxes(title="Change in Forest Area (ha)", zeroline=True, tickformat=".2s")
-        fig.update_yaxes(title="")
+        fig.update_xaxes(
+            title="Change in Forest Area (ha)",
+            zeroline=True,
+            tickformat=".2s",
+            title_standoff=10,
+            tickfont=dict(color="black"),
+            title_font=dict(color="black"),
+        )
+        fig.update_yaxes(
+            title="",
+            tickfont=dict(color="black"),
+            title_font=dict(color="black"),
+        )
 
         # Customize hover text
         fig.update_traces(
@@ -209,7 +262,7 @@ def build_chart_figure(df_all: pd.DataFrame, selected_indicator: str, selected_y
         return fig, title
 
     # 4) Degraded land: top 5 and bottom 5
-    title = f"Top 5 & Bottom 5 Countries: {nice_label(selected_indicator)} ({selected_year})"
+    title = f"Top 5 & Bottom 5 Countries"
 
     # Drop rows with missing values
     tmp = df_all.dropna(subset=[selected_indicator])
@@ -225,7 +278,7 @@ def build_chart_figure(df_all: pd.DataFrame, selected_indicator: str, selected_y
 
     # Avoid overlap (same country showing in both top and bottom)
     bottom = bottom[~bottom[key].isin(top[key])]
-    
+
     # Combine top and bottom into one dataframe
     plot_df = (
         pd.concat([top, bottom], ignore_index=True)
@@ -233,7 +286,7 @@ def build_chart_figure(df_all: pd.DataFrame, selected_indicator: str, selected_y
         .sort_values(selected_indicator, ascending=False)
     )
 
-    # Mark each row as top 5" or bottom 5"
+    # Mark each row as top 5 or bottom 5
     top_keys = set(top[key].tolist())
     plot_df["Group"] = plot_df[key].apply(lambda v: "Top 5" if v in top_keys else "Bottom 5")
 
@@ -241,7 +294,7 @@ def build_chart_figure(df_all: pd.DataFrame, selected_indicator: str, selected_y
     unit = get_unit(selected_indicator)
     plot_df["value_text"] = plot_df[selected_indicator].apply(lambda v: f"{v:.1f}{unit}" if unit else f"{v:.1f}")
 
-    # Build a x-axis label, including the unit in parentheses
+    # Build an x-axis label, including the unit in parentheses
     x_label = f"{nice_label(selected_indicator)} ({unit})" if unit else nice_label(selected_indicator)
 
     # Create the bar chart
@@ -251,17 +304,26 @@ def build_chart_figure(df_all: pd.DataFrame, selected_indicator: str, selected_y
         y="Entity",
         orientation="h",
         color=selected_indicator,
-        color_continuous_scale="Viridis",
+        color_continuous_scale=COLORSCALES.get(selected_indicator, DEFAULT_COLORSCALE),
         category_orders={"Entity": plot_df["Entity"].tolist()},
         custom_data=["Group", "value_text"],
     )
 
-    # Hide the color scale and tighten the chart margins
-    fig.update_layout(coloraxis_showscale=False, margin=dict(l=0, r=0, t=10, b=0))
+    apply_chart_layout(fig)
 
     # Set axis titles
-    fig.update_xaxes(title=x_label, tickformat=".2s")
-    fig.update_yaxes(title="")
+    fig.update_xaxes(
+        title=x_label,
+        tickformat=".2s",
+        title_standoff=10,
+        tickfont=dict(color="black"),
+        title_font=dict(color="black"),
+    )
+    fig.update_yaxes(
+        title="",
+        tickfont=dict(color="black"),
+        title_font=dict(color="black"),
+    )
 
     # Customize hover text
     fig.update_traces(
