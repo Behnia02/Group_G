@@ -138,59 +138,73 @@ INDICATOR_DESCRIPTIONS = {
 }
  
 with st.sidebar:
+    st.markdown("### 🧭 Navigation")
+    if st.button("Go to AI Workflow"):
+        st.switch_page("pages/2_AI_Workflow.py")
+    st.divider()
+
     st.markdown("### 🌿 Filters")
     st.caption("Select an indicator and year to update the map and chart.")
     st.divider()
- 
+
     indicators = data.get_available_indicators()
     selected_indicator = st.selectbox(
         "Indicator",
         indicators,
         format_func=nice_label,
     )
- 
+
     years = data.get_available_years(selected_indicator)
     if not years:
         st.warning("No years available for this indicator.")
         st.stop()
- 
+
     selected_year = st.select_slider(
         "Year",
         options=years,
         value=max(years),
     )
- 
+
     st.divider()
- 
-    desc = INDICATOR_DESCRIPTIONS.get(selected_indicator, "No description available for this indicator.")
+
+    desc = INDICATOR_DESCRIPTIONS.get(
+        selected_indicator,
+        "No description available for this indicator."
+    )
     with st.expander("About this indicator"):
         st.caption(desc)
- 
+
 # Load geodata
- 
 with st.spinner("Loading spatial data…"):
     gdf = data.get_geodata(selected_indicator, selected_year)
- 
+
 # Hero banner
- 
 st.markdown(f"""
 <div class="okavango-hero">
     <h1>🌍 Project Okavango</h1>
     <p>Environmental data explorer · {nice_label(selected_indicator)} · {selected_year}</p>
 </div>
 """, unsafe_allow_html=True)
- 
+
+st.page_link(
+    "pages/2_AI_Workflow.py",
+    label="Open Page 2 · AI Workflow",
+    icon="🛰️",
+)
+st.caption("Select latitude, longitude, and zoom for the image-based workflow.")
+
+st.divider()
+
 # KPI row
- 
 col_data = gdf[selected_indicator].dropna() if selected_indicator in gdf.columns else None
- 
+
 if col_data is not None and len(col_data) > 0:
-    top_idx  = col_data.idxmax()
-    bot_idx  = col_data.idxmin()
+    top_idx = col_data.idxmax()
+    bot_idx = col_data.idxmin()
     name_col = next((c for c in ["ADMIN", "name", "NAME", "Entity"] if c in gdf.columns), None)
     top_name = gdf.loc[top_idx, name_col] if name_col else "N/A"
     bot_name = gdf.loc[bot_idx, name_col] if name_col else "N/A"
- 
+
     st.markdown(f"""
     <div class="kpi-row">
         <div class="kpi-card">
@@ -215,11 +229,10 @@ if col_data is not None and len(col_data) > 0:
         </div>
     </div>
     """, unsafe_allow_html=True)
- 
+
 # Map
- 
 st.markdown('<div class="section-header">World Map</div>', unsafe_allow_html=True)
- 
+
 try:
     fig_map, caption = build_map_figure(gdf, selected_indicator)
     st.plotly_chart(fig_map, use_container_width=True)
@@ -227,17 +240,16 @@ try:
 except ValueError as e:
     st.warning(str(e))
     st.stop()
- 
+
 st.divider()
- 
+
 # Chart
- 
 fig_chart, title_or_msg = build_chart_figure(gdf, selected_indicator, selected_year)
- 
+
 if fig_chart is None:
     st.info(f"ℹ️ {title_or_msg}")
 else:
     st.markdown(f'<div class="section-header">{title_or_msg}</div>', unsafe_allow_html=True)
     st.plotly_chart(fig_chart, use_container_width=True)
- 
+
 st.divider()
