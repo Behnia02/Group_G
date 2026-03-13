@@ -4,7 +4,11 @@ import pandas as pd
 import pydeck as pdk
 import requests
 import streamlit as st
-from country_state_city import City, Country, State
+
+try:
+    from country_state_city import City, Country, State
+except ImportError:
+    City = Country = State = None
 
 
 def render_ai_workflow():
@@ -29,7 +33,7 @@ def render_ai_workflow():
 
         .okavango-hero p {
             color: #888880;
-            font-size: 0.9rem;
+            font-size: 0.95rem;
             font-weight: 300;
             margin: 0;
         }
@@ -73,6 +77,50 @@ def render_ai_workflow():
             padding-bottom: 0.5rem;
             margin-bottom: 1rem;
         }
+
+        .view-link-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            background: #ffffff;
+            border: 0.5px solid #e0ddd6;
+            border-radius: 10px;
+            padding: 1rem 1.2rem;
+            margin: 0.25rem 0 1.25rem 0;
+        }
+
+        .view-link-copy {
+            color: #66665f;
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .view-link-btn {
+            display: inline-block;
+            text-decoration: none !important;
+            background: #2d6a4f;
+            color: white !important;
+            padding: 0.7rem 1rem;
+            border-radius: 8px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        div[data-testid="stNumberInput"] input {
+            background-color: #fcfcfa !important;
+            border: 1px solid #d8d5ce !important;
+            border-radius: 10px !important;
+            color: #1a1a18 !important;
+        }
+
+        div[data-testid="stNumberInput"] label {
+            color: #888880 !important;
+            font-size: 0.72rem !important;
+            font-weight: 500 !important;
+            letter-spacing: 0.08em !important;
+            text-transform: uppercase !important;
+        }
     </style>
     """, unsafe_allow_html=True)
 
@@ -89,83 +137,85 @@ def render_ai_workflow():
         return cleaned if cleaned else fallback
 
     @st.cache_data(show_spinner=False)
-    def get_country_list() -> list:
+    def get_country_names() -> list[str]:
+        if Country is None:
+            return ["Portugal"]
         try:
             countries = Country.get_countries()
-            return sorted(countries, key=lambda x: x.name)
+            names = sorted(
+                [safe_text(c.name, fallback="") for c in countries if safe_text(c.name, fallback="")]
+            )
+            return names if names else ["Portugal"]
         except Exception:
-            return []
-
-    @st.cache_data(show_spinner=False)
-    def get_country_names() -> list[str]:
-        return [safe_text(c.name, fallback="") for c in get_country_list() if safe_text(c.name, fallback="")]
+            return ["Portugal"]
 
     @st.cache_data(show_spinner=False)
     def get_country_code(country_name: str):
-        for country in get_country_list():
-            if safe_text(country.name, fallback="") == country_name:
-                return country.iso2
-        return None
-
-    @st.cache_data(show_spinner=False)
-    def get_regions_for_country(country_name: str) -> list:
-        country_code = get_country_code(country_name)
-        if not country_code:
-            return []
-
+        if Country is None:
+            return None
         try:
-            states = State.get_states_of_country(country_code)
-            return sorted(states, key=lambda x: x.name)
+            for country in Country.get_countries():
+                if safe_text(country.name, fallback="") == country_name:
+                    return country.iso2
         except Exception:
-            return []
+            return None
+        return None
 
     @st.cache_data(show_spinner=False)
     def get_region_names(country_name: str) -> list[str]:
-        return [
-            safe_text(s.name, fallback="")
-            for s in get_regions_for_country(country_name)
-            if safe_text(s.name, fallback="")
-        ]
-
-    @st.cache_data(show_spinner=False)
-    def get_region_code(country_name: str, region_name: str):
-        for state in get_regions_for_country(country_name):
-            if safe_text(state.name, fallback="") == region_name:
-                return state.iso_code
-        return None
-
-    @st.cache_data(show_spinner=False)
-    def get_cities_for_country_region(country_name: str, region_name: str) -> list:
-        country_code = get_country_code(country_name)
-        region_code = get_region_code(country_name, region_name)
-
-        if not country_code or not region_code:
+        if State is None:
             return []
-
+        country_code = get_country_code(country_name)
+        if not country_code:
+            return []
         try:
-            cities = City.get_cities_of_state(country_code, region_code)
-            return sorted(cities, key=lambda x: x.name)
+            states = State.get_states_of_country(country_code)
+            return sorted(
+                [safe_text(s.name, fallback="") for s in states if safe_text(s.name, fallback="")]
+            )
         except Exception:
             return []
 
     @st.cache_data(show_spinner=False)
+    def get_region_code(country_name: str, region_name: str):
+        if State is None:
+            return None
+        country_code = get_country_code(country_name)
+        if not country_code:
+            return None
+        try:
+            for state in State.get_states_of_country(country_code):
+                if safe_text(state.name, fallback="") == region_name:
+                    return state.iso_code
+        except Exception:
+            return None
+        return None
+
+    @st.cache_data(show_spinner=False)
     def get_city_names(country_name: str, region_name: str) -> list[str]:
-        names = []
-        seen = set()
-
-        for city in get_cities_for_country_region(country_name, region_name):
-            city_name = safe_text(city.name, fallback="")
-            if city_name and city_name not in seen:
-                seen.add(city_name)
-                names.append(city_name)
-
-        return names
+        if City is None:
+            return []
+        country_code = get_country_code(country_name)
+        region_code = get_region_code(country_name, region_name)
+        if not country_code or not region_code:
+            return []
+        try:
+            cities = City.get_cities_of_state(country_code, region_code)
+            names = []
+            seen = set()
+            for city in cities:
+                name = safe_text(city.name, fallback="")
+                if name and name not in seen:
+                    seen.add(name)
+                    names.append(name)
+            return sorted(names)
+        except Exception:
+            return []
 
     @st.cache_data(show_spinner=False)
     def geocode_place(country: str, region: str, city: str) -> tuple[float | None, float | None]:
         query_parts = [city.strip(), region.strip(), country.strip()]
         query = ", ".join(part for part in query_parts if part)
-
         if not query:
             return None, None
 
@@ -185,10 +235,8 @@ def render_ai_workflow():
             response = requests.get(url, params=params, headers=headers, timeout=10)
             response.raise_for_status()
             results = response.json()
-
             if not results:
                 return None, None
-
             return float(results[0]["lat"]), float(results[0]["lon"])
         except Exception:
             return None, None
@@ -214,7 +262,6 @@ def render_ai_workflow():
             response.raise_for_status()
             data = response.json()
             address = data.get("address", {})
-
             country = safe_text(address.get("country", ""))
             city = safe_text(
                 address.get("city")
@@ -229,8 +276,6 @@ def render_ai_workflow():
             return "Unknown", "Unknown"
 
     country_options = get_country_names()
-    if not country_options:
-        country_options = ["Portugal"]
 
     if "ai_settings" not in st.session_state:
         st.session_state.ai_settings = {
@@ -258,7 +303,6 @@ def render_ai_workflow():
         or st.session_state.sync_from_settings
     ):
         settings = st.session_state.ai_settings
-
         st.session_state.lat_input = f"{settings['latitude']:.4f}"
         st.session_state.lon_input = f"{settings['longitude']:.4f}"
         st.session_state.zoom_input = int(settings["zoom"])
@@ -266,83 +310,165 @@ def render_ai_workflow():
         default_country = settings["country"]
         if default_country not in country_options:
             default_country = "Portugal" if "Portugal" in country_options else country_options[0]
-
         st.session_state.place_country = default_country
 
         region_options_init = get_region_names(default_country)
         default_region = settings.get("region", "")
         if default_region not in region_options_init:
             default_region = region_options_init[0] if region_options_init else ""
-
         st.session_state.place_region = default_region
 
         city_options_init = get_city_names(default_country, default_region) if default_region else []
-        default_city = settings["city"]
+        default_city = settings.get("city", "")
         if default_city not in city_options_init:
             default_city = city_options_init[0] if city_options_init else ""
-
         st.session_state.place_city = default_city
+
         st.session_state.sync_from_settings = False
 
     with st.sidebar:
         st.markdown("### 🛰️ AI controls")
+        st.markdown("##### Location method")
 
-        st.radio(
-            "Location method",
-            ["By coordinates", "By country and city"],
-            key="location_mode",
+        is_coordinates = st.session_state.location_mode == "By coordinates"
+        is_country_city = st.session_state.location_mode == "By country and city"
+
+        st.markdown(
+            """
+            <style>
+            div[data-testid="stButton"][data-key="mode_coordinates"] button {{
+                width: 100% !important;
+                border-radius: 12px !important;
+                min-height: 3rem !important;
+                border: {"2px solid #000000" if is_coordinates else "1px solid #d8d5ce"} !important;
+                background: #ffffff !important;
+                color: #1a1a18 !important;
+                font-size: 0.86rem !important;
+                font-weight: 600 !important;
+                letter-spacing: 0.04em !important;
+                box-shadow: none !important;
+                outline: none !important;
+                margin-bottom: 0.4rem !important;
+            }}
+
+            div[data-testid="stButton"][data-key="mode_coordinates"] button:hover,
+            div[data-testid="stButton"][data-key="mode_coordinates"] button:focus,
+            div[data-testid="stButton"][data-key="mode_coordinates"] button:focus-visible {{
+                border: 2px solid #000000 !important;
+                background: #ffffff !important;
+                color: #1a1a18 !important;
+                box-shadow: none !important;
+                outline: none !important;
+            }}
+
+            div[data-testid="stButton"][data-key="mode_country_city"] button {{
+                width: 100% !important;
+                border-radius: 12px !important;
+                min-height: 3rem !important;
+                border: {"2px solid #000000" if is_country_city else "1px solid #d8d5ce"} !important;
+                background: #ffffff !important;
+                color: #1a1a18 !important;
+                font-size: 0.86rem !important;
+                font-weight: 600 !important;
+                letter-spacing: 0.04em !important;
+                box-shadow: none !important;
+                outline: none !important;
+                margin-bottom: 0.4rem !important;
+            }}
+
+            div[data-testid="stButton"][data-key="mode_country_city"] button:hover,
+            div[data-testid="stButton"][data-key="mode_country_city"] button:focus,
+            div[data-testid="stButton"][data-key="mode_country_city"] button:focus-visible {{
+                border: 2px solid #000000 !important;
+                background: #ffffff !important;
+                color: #1a1a18 !important;
+                box-shadow: none !important;
+                outline: none !important;
+            }}
+            </style>
+            <div class="mode-switch"></div>
+            """,
+            unsafe_allow_html=True,
         )
+
+        mode_container = st.container()
+
+        with mode_container:
+            if st.button(
+                "📍 Coordinates",
+                key="mode_coordinates",
+                use_container_width=True,
+            ):
+                st.session_state.location_mode = "By coordinates"
+                st.rerun()
+
+            if st.button(
+                "🌍 Country · Region · City",
+                key="mode_country_city",
+                use_container_width=True,
+            ):
+                st.session_state.location_mode = "By country and city"
+                st.rerun()
 
         st.slider("Zoom", min_value=1, max_value=20, key="zoom_input")
 
         if st.session_state.location_mode == "By coordinates":
-            st.text_input("Latitude", key="lat_input")
-            st.text_input("Longitude", key="lon_input")
+            try:
+                lat_default = float(str(st.session_state.lat_input).replace(",", "."))
+            except Exception:
+                lat_default = float(st.session_state.ai_settings["latitude"])
 
-            st.text_input("Country", value=st.session_state.ai_settings["country"], disabled=True)
-            st.text_input("City", value=st.session_state.ai_settings["city"], disabled=True)
+            try:
+                lon_default = float(str(st.session_state.lon_input).replace(",", "."))
+            except Exception:
+                lon_default = float(st.session_state.ai_settings["longitude"])
+
+            latitude_value = st.number_input(
+                "Latitude",
+                min_value=-90.0,
+                max_value=90.0,
+                value=lat_default,
+                step=0.0001,
+                format="%.4f",
+                help="Value between -90 and 90",
+            )
+
+            longitude_value = st.number_input(
+                "Longitude",
+                min_value=-180.0,
+                max_value=180.0,
+                value=lon_default,
+                step=0.0001,
+                format="%.4f",
+                help="Value between -180 and 180",
+            )
+
+            st.session_state.lat_input = f"{latitude_value:.4f}"
+            st.session_state.lon_input = f"{longitude_value:.4f}"
+
+            st.caption("Enter exact coordinates to preview a specific location.")
 
             if st.button("Save coordinates", use_container_width=True):
-                try:
-                    latitude = float(st.session_state.lat_input.replace(",", "."))
-                    longitude = float(st.session_state.lon_input.replace(",", "."))
-
-                    if not (-90 <= latitude <= 90):
-                        st.error("Latitude must be between -90 and 90.")
-                    elif not (-180 <= longitude <= 180):
-                        st.error("Longitude must be between -180 and 180.")
-                    else:
-                        country, city = reverse_geocode(latitude, longitude)
-                        st.session_state.ai_settings = {
-                            "latitude": latitude,
-                            "longitude": longitude,
-                            "zoom": int(st.session_state.zoom_input),
-                            "country": country,
-                            "region": st.session_state.ai_settings.get("region", ""),
-                            "city": city,
-                        }
-                        st.session_state.sync_from_settings = True
-                        st.rerun()
-                except ValueError:
-                    st.error("Latitude and longitude must be valid numbers.")
+                country, city = reverse_geocode(latitude_value, longitude_value)
+                st.session_state.ai_settings = {
+                    "latitude": latitude_value,
+                    "longitude": longitude_value,
+                    "zoom": int(st.session_state.zoom_input),
+                    "country": country,
+                    "region": st.session_state.ai_settings.get("region", ""),
+                    "city": city,
+                }
+                st.session_state.sync_from_settings = True
+                st.rerun()
 
         else:
-            selected_country = st.selectbox(
-                "Country",
-                options=country_options,
-                key="place_country",
-            )
+            selected_country = st.selectbox("Country", options=country_options, key="place_country")
 
             region_options = get_region_names(selected_country)
             if region_options:
                 if st.session_state.place_region not in region_options:
                     st.session_state.place_region = region_options[0]
-
-                selected_region = st.selectbox(
-                    "Region",
-                    options=region_options,
-                    key="place_region",
-                )
+                selected_region = st.selectbox("Region", options=region_options, key="place_region")
             else:
                 selected_region = ""
                 st.selectbox("Region", options=["No regions found"], disabled=True)
@@ -351,30 +477,16 @@ def render_ai_workflow():
             if city_options:
                 if st.session_state.place_city not in city_options:
                     st.session_state.place_city = city_options[0]
-
-                selected_city = st.selectbox(
-                    "City",
-                    options=city_options,
-                    key="place_city",
-                )
+                selected_city = st.selectbox("City", options=city_options, key="place_city")
             else:
                 selected_city = ""
                 st.selectbox("City", options=["No cities found"], disabled=True)
 
+            st.caption("Choose a country, then a region, then a city.")
+
             preview_lat, preview_lon = (None, None)
             if selected_country and selected_region and selected_city:
                 preview_lat, preview_lon = geocode_place(selected_country, selected_region, selected_city)
-
-            st.text_input(
-                "Latitude",
-                value="" if preview_lat is None else f"{preview_lat:.4f}",
-                disabled=True,
-            )
-            st.text_input(
-                "Longitude",
-                value="" if preview_lon is None else f"{preview_lon:.4f}",
-                disabled=True,
-            )
 
             if st.button("Use selected place", use_container_width=True):
                 if preview_lat is None or preview_lon is None:
@@ -397,6 +509,15 @@ def render_ai_workflow():
     <div class="okavango-hero">
         <h1>🛰️ AI Workflow</h1>
         <p>Select the area using coordinates or by choosing country, region and city.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div class="view-link-card">
+        <div class="view-link-copy">
+            Want to go back to the global indicators view? Open the Environmental Explorer.
+        </div>
+        <a href="?view=explorer" target="_self" class="view-link-btn">Open Environmental Explorer →</a>
     </div>
     """, unsafe_allow_html=True)
 

@@ -1,13 +1,9 @@
-# To run this Streamlit app from the project root use:
-# python -m streamlit run app/streamlit_app.py
-
 import streamlit as st
 from project_class import EnvironmentalData
 from plots_map import build_map_figure, nice_label
 from plots_charts import build_chart_figure
 from ai_workflow import render_ai_workflow
 
-# Page config
 st.set_page_config(
     page_title="Project Okavango",
     page_icon="🌿",
@@ -15,18 +11,26 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Custom CSS
+view_param = st.query_params.get("view", "explorer")
+current_view = "AI Workflow" if view_param == "ai-workflow" else "Environmental Explorer"
+
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;1,400&family=Inter:wght@300;400;500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600&family=Inter:wght@300;400;500;600&display=swap');
 
     html, body, [class*="css"] {
         font-family: 'Inter', sans-serif;
     }
 
-    .stApp { background-color: #f7f7f5; }
-    [data-testid="stAppViewContainer"] > .main { background-color: #f7f7f5; }
-    [data-testid="block-container"] { background-color: #f7f7f5; padding-top: 2rem; }
+    .stApp,
+    [data-testid="stAppViewContainer"] > .main,
+    [data-testid="block-container"] {
+        background-color: #f7f7f5;
+    }
+
+    [data-testid="block-container"] {
+        padding-top: 2rem;
+    }
 
     [data-testid="stSidebar"] {
         background-color: #ffffff;
@@ -40,7 +44,9 @@ st.markdown("""
     [data-testid="stSidebar"] p,
     [data-testid="stSidebar"] span,
     [data-testid="stSidebar"] label,
-    [data-testid="stSidebar"] .stMarkdown { color: #555550 !important; }
+    [data-testid="stSidebar"] .stMarkdown {
+        color: #555550 !important;
+    }
 
     [data-testid="stSidebar"] .stSelectbox label,
     [data-testid="stSidebar"] .stSlider label,
@@ -91,12 +97,16 @@ st.markdown("""
 
     .okavango-hero p {
         color: #888880;
-        font-size: 1.15rem;
+        font-size: 1.05rem;
         font-weight: 300;
         margin: 0;
     }
 
-    .kpi-row { display: flex; gap: 1rem; margin-bottom: 1.5rem; }
+    .kpi-row {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
 
     .kpi-card {
         flex: 1;
@@ -144,9 +154,79 @@ st.markdown("""
         padding: 0.5rem;
     }
 
+    .view-link-card {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        background: #ffffff;
+        border: 0.5px solid #e0ddd6;
+        border-radius: 10px;
+        padding: 1rem 1.2rem;
+        margin: 0.25rem 0 1.25rem 0;
+    }
+
+    .view-link-copy {
+        color: #66665f;
+        font-size: 0.95rem;
+        line-height: 1.5;
+    }
+
+    .view-link-btn {
+        display: inline-block;
+        text-decoration: none !important;
+        background: #2d6a4f;
+        color: white !important;
+        padding: 0.7rem 1rem;
+        border-radius: 8px;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .sidebar-nav-title {
+        font-size: 1.35rem;
+        font-weight: 600;
+        color: #1f1f1c;
+        margin-bottom: 0.8rem;
+    }
+
+    .sidebar-nav-link {
+        text-decoration: none !important;
+        color: inherit !important;
+        display: block;
+        margin-bottom: 0.8rem;
+    }
+
+    .sidebar-nav-item {
+        border-radius: 12px;
+        border: 1px solid #e5e2db;
+        background: #faf9f7;
+        padding: 0.95rem 1rem;
+        transition: all 0.18s ease;
+    }
+
+    .sidebar-nav-item.active {
+        background: #eef6f1;
+        border-color: #2d6a4f;
+        box-shadow: inset 4px 0 0 #2d6a4f;
+    }
+
+    .sidebar-nav-label {
+        display: block;
+        color: #1f1f1c !important;
+        font-size: 0.98rem;
+        font-weight: 600;
+        margin-bottom: 0.15rem;
+    }
+
+    .sidebar-nav-sub {
+        display: block;
+        color: #7a7872 !important;
+        font-size: 0.82rem;
+        line-height: 1.35;
+    }
+
     hr { border-color: #e0ddd6 !important; }
-    .stCaption, [data-testid="stCaptionContainer"] { color: #aaa !important; }
-    [data-testid="stSpinner"] p { color: #555550; }
     #MainMenu { visibility: hidden; }
     footer { visibility: hidden; }
 
@@ -157,33 +237,50 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Data loading
+
 @st.cache_resource(show_spinner="Initialising data pipeline…")
 def load_data() -> EnvironmentalData:
     return EnvironmentalData()
 
+
 data = load_data()
 
-# App-level navigation state
-if "current_view" not in st.session_state:
-    st.session_state.current_view = "Environmental Explorer"
-
-# Sidebar navigation first
 with st.sidebar:
     st.markdown("### 🧭 Navigation")
-    current_view = st.radio(
-        "Go to",
-        ["Environmental Explorer", "AI Workflow"],
-        key="current_view",
+
+    explorer_active = "active" if current_view == "Environmental Explorer" else ""
+    ai_active = "active" if current_view == "AI Workflow" else ""
+
+    st.markdown(
+        f"""
+        <a href="?view=explorer" target="_self" class="sidebar-nav-link">
+            <div class="sidebar-nav-item {explorer_active}">
+                <span class="sidebar-nav-label">🌍 Environmental Explorer</span>
+                <span class="sidebar-nav-sub">Maps, indicators and trends</span>
+            </div>
+        </a>
+        """,
+        unsafe_allow_html=True,
     )
+
+    st.markdown(
+        f"""
+        <a href="?view=ai-workflow" target="_self" class="sidebar-nav-link">
+            <div class="sidebar-nav-item {ai_active}">
+                <span class="sidebar-nav-label">🛰️ AI Workflow</span>
+                <span class="sidebar-nav-sub">Choose location and preview the area</span>
+            </div>
+        </a>
+        """,
+        unsafe_allow_html=True,
+    )
+
     st.divider()
 
-# If AI Workflow is selected, render it and stop here
 if current_view == "AI Workflow":
     render_ai_workflow()
     st.stop()
 
-# Sidebar content for Environmental Explorer
 INDICATOR_DESCRIPTIONS = {
     "annual_deforestation": "Total forest area lost per year (hectares). Does not account for reforestation.",
     "forest_area_change": "Net annual change in forest area (hectares). Negative values mean net forest loss.",
@@ -224,11 +321,9 @@ with st.sidebar:
     with st.expander("About this indicator"):
         st.caption(desc)
 
-# Load geodata
 with st.spinner("Loading spatial data…"):
     gdf = data.get_geodata(selected_indicator, selected_year)
 
-# Hero banner
 st.markdown(f"""
 <div class="okavango-hero">
     <h1>🌍 Project Okavango</h1>
@@ -236,11 +331,17 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-st.caption("Use the sidebar navigation to switch to the AI Workflow view.")
+st.markdown("""
+<div class="view-link-card">
+    <div class="view-link-copy">
+        Ready to analyse a specific place in more detail? Open the AI Workflow view to choose a location and preview it.
+    </div>
+    <a href="?view=ai-workflow" target="_self" class="view-link-btn">Open AI Workflow →</a>
+</div>
+""", unsafe_allow_html=True)
 
 st.divider()
 
-# KPI row
 col_data = gdf[selected_indicator].dropna() if selected_indicator in gdf.columns else None
 
 if col_data is not None and len(col_data) > 0:
@@ -275,7 +376,6 @@ if col_data is not None and len(col_data) > 0:
     </div>
     """, unsafe_allow_html=True)
 
-# Map
 st.markdown('<div class="section-header">World Map</div>', unsafe_allow_html=True)
 
 try:
@@ -288,7 +388,6 @@ except ValueError as e:
 
 st.divider()
 
-# Chart
 fig_chart, title_or_msg = build_chart_figure(gdf, selected_indicator, selected_year)
 
 if fig_chart is None:
