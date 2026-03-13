@@ -139,7 +139,7 @@ PRESET_LOCATIONS = {
 # Sidebar
 with st.sidebar:
     st.markdown("### 🧭 Navigation")
-    st.page_link("streamlit_app.py", label="Back to Environmental Explorer", icon="🌍")
+    st.markdown("This is the standalone AI Workflow app.")
     st.divider()
 
     st.markdown("### 📍 Quick presets")
@@ -215,7 +215,6 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-st.page_link("streamlit_app.py", label="Back to Page 1 · Environmental Explorer", icon="🌍")
 st.caption("This page is ready for the next step: fetching an image for these coordinates.")
 
 # KPI row
