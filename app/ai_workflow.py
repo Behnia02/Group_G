@@ -4,6 +4,7 @@ import pandas as pd
 import pydeck as pdk
 import requests
 import streamlit as st
+from ollama_utils import analyze_satellite_image
 from tile_utils import download_satellite_image
 
 try:
@@ -121,6 +122,21 @@ def render_ai_workflow():
             font-size: 0.95rem;
             line-height: 1.5;
             margin-bottom: 0.9rem;
+        }
+
+        .analysis-panel {
+            background: #ffffff;
+            border: 0.5px solid #e0ddd6;
+            border-radius: 12px;
+            padding: 1.2rem;
+            min-height: 100%;
+        }
+
+        .analysis-intro {
+            color: #66665f;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            margin-bottom: 1rem;
         }
 
         div[data-testid="stNumberInput"] input {
@@ -343,6 +359,12 @@ def render_ai_workflow():
     if "satellite_image_path" not in st.session_state:
         st.session_state.satellite_image_path = None
 
+    if "satellite_analysis_result" not in st.session_state:
+        st.session_state.satellite_analysis_result = None
+
+    if "satellite_analysis_error" not in st.session_state:
+        st.session_state.satellite_analysis_error = None
+
     if (
         "lat_input" not in st.session_state
         or "lon_input" not in st.session_state
@@ -517,6 +539,8 @@ def render_ai_workflow():
                     "city": city,
                 }
                 st.session_state.satellite_image_path = None
+                st.session_state.satellite_analysis_result = None
+                st.session_state.satellite_analysis_error = None
                 st.session_state.sync_from_settings = True
                 st.rerun()
 
@@ -567,6 +591,8 @@ def render_ai_workflow():
                         "city": selected_city,
                     }
                     st.session_state.satellite_image_path = None
+                    st.session_state.satellite_analysis_result = None
+                    st.session_state.satellite_analysis_error = None
                     st.session_state.sync_from_settings = True
                     st.rerun()
 
@@ -662,17 +688,64 @@ def render_ai_workflow():
                     output_dir="images",
                 )
             st.session_state.satellite_image_path = str(image_path)
+            st.session_state.satellite_analysis_result = None
+            st.session_state.satellite_analysis_error = None
         except Exception as exc:
             st.session_state.satellite_image_path = None
+            st.session_state.satellite_analysis_result = None
+            st.session_state.satellite_analysis_error = None
             st.error(f"Could not generate the satellite image: {exc}")
 
     if st.session_state.satellite_image_path:
-        st.image(
-            st.session_state.satellite_image_path,
-            caption=(
-                f'{settings["city"]}, {settings["country"]} '
-                f'({settings["latitude"]:.4f}, {settings["longitude"]:.4f})'
-            ),
-            use_container_width=True,
-        )
-        st.caption(f"Saved to `{st.session_state.satellite_image_path}`")
+        image_col, analysis_col = st.columns([1.8, 1], gap="large")
+
+        with image_col:
+            st.image(
+                st.session_state.satellite_image_path,
+                caption=(
+                    f'{settings["city"]}, {settings["country"]} '
+                    f'({settings["latitude"]:.4f}, {settings["longitude"]:.4f})'
+                ),
+                use_container_width=True,
+            )
+            st.caption(f"Saved to `{st.session_state.satellite_image_path}`")
+
+        with analysis_col:
+            st.markdown(
+                """
+                <div class="analysis-panel">
+                    <div class="analysis-intro">
+                        Run the vision model on this satellite image to generate a place description and an environmental risk assessment.
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            if st.button("Analyze image with Ollama", use_container_width=True):
+                try:
+                    with st.spinner("Analyzing satellite image with Ollama..."):
+                        result = analyze_satellite_image(st.session_state.satellite_image_path)
+                    st.session_state.satellite_analysis_result = result
+                    st.session_state.satellite_analysis_error = None
+                except Exception as exc:
+                    st.session_state.satellite_analysis_result = None
+                    st.session_state.satellite_analysis_error = str(exc)
+
+            if st.session_state.satellite_analysis_error:
+                st.error(f"Could not analyze the satellite image: {st.session_state.satellite_analysis_error}")
+            elif st.session_state.satellite_analysis_result:
+                result = st.session_state.satellite_analysis_result
+
+                st.subheader("Image description")
+                st.write(result["description"])
+
+                st.subheader("Environmental risk assessment")
+                st.write(result["risk_assessment"])
+
+                if result["is_at_risk"]:
+                    st.error("The model flagged this area as potentially at environmental risk.")
+                else:
+                    st.success("The model did not flag this area as environmentally at risk.")
+            else:
+                st.info("Click the button to analyze this image with Ollama.")
