@@ -395,5 +395,3 @@ if fig_chart is None:
 else:
     st.markdown(f'<div class="section-header">{title_or_msg}</div>', unsafe_allow_html=True)
     st.plotly_chart(fig_chart, use_container_width=True)
-
-st.divider()
