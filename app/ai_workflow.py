@@ -136,6 +136,25 @@ def render_ai_workflow():
         cleaned = ascii_text(text)
         return cleaned if cleaned else fallback
 
+    COUNTRY_ALIASES = {
+        "UK": "United Kingdom",
+        "U.K.": "United Kingdom",
+        "Great Britain": "United Kingdom",
+        "Britain": "United Kingdom",
+        "England": "United Kingdom",
+        "US": "United States",
+        "U.S.": "United States",
+        "USA": "United States",
+        "U.S.A.": "United States",
+        "Czechia": "Czech Republic",
+    }
+
+    def normalize_country_name(country_name: str) -> str:
+        cleaned = safe_text(country_name, fallback="")
+        if not cleaned:
+            return ""
+        return COUNTRY_ALIASES.get(cleaned, cleaned)
+
     @st.cache_data(show_spinner=False)
     def get_country_names() -> list[str]:
         if Country is None:
@@ -153,10 +172,22 @@ def render_ai_workflow():
     def get_country_code(country_name: str):
         if Country is None:
             return None
+        normalized_name = normalize_country_name(country_name)
+        if not normalized_name:
+            return None
         try:
+            exact_matches = []
+            partial_matches = []
             for country in Country.get_countries():
-                if safe_text(country.name, fallback="") == country_name:
-                    return country.iso2
+                dataset_name = safe_text(country.name, fallback="")
+                if dataset_name == normalized_name:
+                    exact_matches.append(country.iso2)
+                elif normalized_name.lower() in dataset_name.lower() or dataset_name.lower() in normalized_name.lower():
+                    partial_matches.append(country.iso2)
+            if exact_matches:
+                return exact_matches[0]
+            if partial_matches:
+                return partial_matches[0]
         except Exception:
             return None
         return None
@@ -170,9 +201,14 @@ def render_ai_workflow():
             return []
         try:
             states = State.get_states_of_country(country_code)
-            return sorted(
-                [safe_text(s.name, fallback="") for s in states if safe_text(s.name, fallback="")]
-            )
+            names = []
+            seen = set()
+            for state in states:
+                name = safe_text(state.name, fallback="")
+                if name and name not in seen:
+                    seen.add(name)
+                    names.append(name)
+            return sorted(names)
         except Exception:
             return []
 
@@ -191,58 +227,89 @@ def render_ai_workflow():
             return None
         return None
 
+    def _dedupe_names(items) -> list[str]:
+        names = []
+        seen = set()
+        for item in items:
+            name = safe_text(getattr(item, "name", ""), fallback="")
+            if name and name not in seen:
+                seen.add(name)
+                names.append(name)
+        return sorted(names)
+
     @st.cache_data(show_spinner=False)
-    def get_city_names(country_name: str, region_name: str) -> list[str]:
+    def get_city_names(country_name: str, region_name: str = "", allow_country_fallback: bool = False) -> list[str]:
         if City is None:
             return []
+
         country_code = get_country_code(country_name)
-        region_code = get_region_code(country_name, region_name)
-        if not country_code or not region_code:
+        if not country_code:
             return []
-        try:
-            cities = City.get_cities_of_state(country_code, region_code)
-            names = []
-            seen = set()
-            for city in cities:
-                name = safe_text(city.name, fallback="")
-                if name and name not in seen:
-                    seen.add(name)
-                    names.append(name)
-            return sorted(names)
-        except Exception:
-            return []
+
+        if region_name:
+            region_code = get_region_code(country_name, region_name)
+            if region_code:
+                try:
+                    state_cities = City.get_cities_of_state(country_code, region_code) or []
+                    names = _dedupe_names(state_cities)
+                    if names:
+                        return names
+                except Exception:
+                    pass
+
+        if allow_country_fallback:
+            try:
+                all_country_cities = getattr(City, "get_cities_of_country", None)
+                if callable(all_country_cities):
+                    names = _dedupe_names(all_country_cities(country_code) or [])
+                    if names:
+                        return names
+            except Exception:
+                pass
+
+        return []
 
     @st.cache_data(show_spinner=False)
     def geocode_place(country: str, region: str, city: str) -> tuple[float | None, float | None]:
-        query_parts = [city.strip(), region.strip(), country.strip()]
-        query = ", ".join(part for part in query_parts if part)
-        if not query:
-            return None, None
+        country = normalize_country_name(country)
+        queries = []
+        if city and region and country:
+            queries.append(", ".join([city.strip(), region.strip(), country.strip()]))
+        if region and country:
+            queries.append(", ".join([region.strip(), country.strip()]))
+        if city and country:
+            queries.append(", ".join([city.strip(), country.strip()]))
+        if country:
+            queries.append(country.strip())
 
         url = "https://nominatim.openstreetmap.org/search"
-        params = {
-            "q": query,
-            "format": "jsonv2",
-            "limit": 1,
-            "accept-language": "en",
-        }
         headers = {
             "User-Agent": "ProjectOkavango/1.0 (student project)",
             "Accept-Language": "en",
         }
 
-        try:
-            response = requests.get(url, params=params, headers=headers, timeout=10)
-            response.raise_for_status()
-            results = response.json()
-            if not results:
-                return None, None
-            return float(results[0]["lat"]), float(results[0]["lon"])
-        except Exception:
-            return None, None
+        for query in queries:
+            if not query:
+                continue
+            params = {
+                "q": query,
+                "format": "jsonv2",
+                "limit": 1,
+                "accept-language": "en",
+            }
+            try:
+                response = requests.get(url, params=params, headers=headers, timeout=10)
+                response.raise_for_status()
+                results = response.json()
+                if results:
+                    return float(results[0]["lat"]), float(results[0]["lon"])
+            except Exception:
+                continue
+
+        return None, None
 
     @st.cache_data(show_spinner=False)
-    def reverse_geocode(lat: float, lon: float) -> tuple[str, str]:
+    def reverse_geocode(lat: float, lon: float) -> tuple[str, str, str]:
         url = "https://nominatim.openstreetmap.org/reverse"
         params = {
             "lat": lat,
@@ -263,17 +330,25 @@ def render_ai_workflow():
             data = response.json()
             address = data.get("address", {})
             country = safe_text(address.get("country", ""))
+            region = safe_text(
+                address.get("state")
+                or address.get("region")
+                or address.get("county")
+                or address.get("state_district")
+                or ""
+            )
             city = safe_text(
                 address.get("city")
                 or address.get("town")
                 or address.get("village")
                 or address.get("municipality")
+                or address.get("suburb")
                 or address.get("county")
                 or ""
             )
-            return country, city
+            return country, region, city
         except Exception:
-            return "Unknown", "Unknown"
+            return "Unknown", "", "Unknown"
 
     country_options = get_country_names()
 
@@ -292,6 +367,7 @@ def render_ai_workflow():
 
     if "location_mode" not in st.session_state:
         st.session_state.location_mode = "By coordinates"
+
 
     if (
         "lat_input" not in st.session_state
@@ -315,13 +391,17 @@ def render_ai_workflow():
         region_options_init = get_region_names(default_country)
         default_region = settings.get("region", "")
         if default_region not in region_options_init:
-            default_region = region_options_init[0] if region_options_init else ""
+            default_region = default_region if default_region else ""
         st.session_state.place_region = default_region
 
-        city_options_init = get_city_names(default_country, default_region) if default_region else []
+        city_options_init = get_city_names(
+            default_country,
+            "",
+            allow_country_fallback=True,
+        )
         default_city = settings.get("city", "")
         if default_city not in city_options_init:
-            default_city = city_options_init[0] if city_options_init else ""
+            default_city = default_city if default_city else (city_options_init[0] if city_options_init else "")
         st.session_state.place_city = default_city
 
         st.session_state.sync_from_settings = False
@@ -334,7 +414,7 @@ def render_ai_workflow():
         is_country_city = st.session_state.location_mode == "By country and city"
 
         st.markdown(
-            """
+            f"""
             <style>
             div[data-testid="stButton"][data-key="mode_coordinates"] button {{
                 width: 100% !important;
@@ -449,13 +529,13 @@ def render_ai_workflow():
             st.caption("Enter exact coordinates to preview a specific location.")
 
             if st.button("Save coordinates", use_container_width=True):
-                country, city = reverse_geocode(latitude_value, longitude_value)
+                country, region, city = reverse_geocode(latitude_value, longitude_value)
                 st.session_state.ai_settings = {
                     "latitude": latitude_value,
                     "longitude": longitude_value,
                     "zoom": int(st.session_state.zoom_input),
                     "country": country,
-                    "region": st.session_state.ai_settings.get("region", ""),
+                    "region": region,
                     "city": city,
                 }
                 st.session_state.sync_from_settings = True
@@ -464,29 +544,49 @@ def render_ai_workflow():
         else:
             selected_country = st.selectbox("Country", options=country_options, key="place_country")
 
-            region_options = get_region_names(selected_country)
-            if region_options:
-                if st.session_state.place_region not in region_options:
-                    st.session_state.place_region = region_options[0]
-                selected_region = st.selectbox("Region", options=region_options, key="place_region")
-            else:
-                selected_region = ""
-                st.selectbox("Region", options=["No regions found"], disabled=True)
+            city_options = get_city_names(
+                selected_country,
+                "",
+                allow_country_fallback=True,
+            )
 
-            city_options = get_city_names(selected_country, selected_region) if selected_region else []
             if city_options:
                 if st.session_state.place_city not in city_options:
-                    st.session_state.place_city = city_options[0]
-                selected_city = st.selectbox("City", options=city_options, key="place_city")
+                    current_city = safe_text(st.session_state.place_city, fallback="")
+                    st.session_state.place_city = current_city if current_city in city_options else city_options[0]
+                selected_city = st.selectbox(
+                    "City",
+                    options=city_options,
+                    key="place_city",
+                    help="Start typing to search for a city in the selected country.",
+                )
             else:
-                selected_city = ""
-                st.selectbox("City", options=["No cities found"], disabled=True)
+                selected_city = safe_text(st.session_state.place_city, fallback="")
+                st.text_input("City", key="place_city")
 
-            st.caption("Choose a country, then a region, then a city.")
+            st.caption("Pick a country and city. The app will try to detect the region automatically.")
 
             preview_lat, preview_lon = (None, None)
-            if selected_country and selected_region and selected_city:
-                preview_lat, preview_lon = geocode_place(selected_country, selected_region, selected_city)
+            detected_country = selected_country
+            detected_region = safe_text(st.session_state.get("place_region", ""), fallback="")
+            detected_city = selected_city
+
+            if selected_country and selected_city:
+                preview_lat, preview_lon = geocode_place(selected_country, "", selected_city)
+            elif selected_country:
+                preview_lat, preview_lon = geocode_place(selected_country, "", "")
+
+            if preview_lat is not None and preview_lon is not None:
+                rev_country, rev_region, rev_city = reverse_geocode(preview_lat, preview_lon)
+                if rev_country and rev_country != "Unknown":
+                    detected_country = rev_country
+                if rev_region:
+                    detected_region = rev_region
+                if rev_city and rev_city != "Unknown":
+                    detected_city = rev_city
+
+            if detected_region:
+                st.caption(f"Detected region: {detected_region}")
 
             if st.button("Use selected place", use_container_width=True):
                 if preview_lat is None or preview_lon is None:
@@ -496,19 +596,43 @@ def render_ai_workflow():
                         "latitude": preview_lat,
                         "longitude": preview_lon,
                         "zoom": int(st.session_state.zoom_input),
-                        "country": selected_country,
-                        "region": selected_region,
-                        "city": selected_city,
+                        "country": detected_country or selected_country,
+                        "region": detected_region,
+                        "city": detected_city or selected_city,
                     }
+                    st.session_state.place_country = detected_country or selected_country
+                    st.session_state.place_region = detected_region
+                    st.session_state.place_city = detected_city or selected_city
                     st.session_state.sync_from_settings = True
                     st.rerun()
 
-    settings = st.session_state.ai_settings
+    if st.session_state.location_mode == "By country and city":
+        preview_settings = {
+            "latitude": st.session_state.ai_settings["latitude"],
+            "longitude": st.session_state.ai_settings["longitude"],
+            "zoom": int(st.session_state.zoom_input),
+            "country": safe_text(st.session_state.get("place_country", ""), fallback=st.session_state.ai_settings["country"]),
+            "region": safe_text(st.session_state.get("place_region", ""), fallback=""),
+            "city": safe_text(st.session_state.get("place_city", ""), fallback=st.session_state.ai_settings.get("city", "")),
+        }
+        if "preview_lat" in locals() and preview_lat is not None and preview_lon is not None:
+            preview_settings["latitude"] = preview_lat
+            preview_settings["longitude"] = preview_lon
+    else:
+        preview_settings = st.session_state.ai_settings.copy()
+        preview_settings["zoom"] = int(st.session_state.zoom_input)
+        try:
+            preview_settings["latitude"] = float(str(st.session_state.lat_input).replace(",", "."))
+            preview_settings["longitude"] = float(str(st.session_state.lon_input).replace(",", "."))
+        except Exception:
+            pass
+
+    settings = preview_settings
 
     st.markdown("""
     <div class="okavango-hero">
         <h1>🛰️ AI Workflow</h1>
-        <p>Select the area using coordinates or by choosing country, region and city.</p>
+        <p>Select the area using coordinates or by choosing a country and city.</p>
     </div>
     """, unsafe_allow_html=True)
 
