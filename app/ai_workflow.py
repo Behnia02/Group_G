@@ -4,6 +4,7 @@ import pandas as pd
 import pydeck as pdk
 import requests
 import streamlit as st
+from tile_utils import download_satellite_image
 
 try:
     from country_state_city import City, Country, State
@@ -107,6 +108,21 @@ def render_ai_workflow():
             white-space: nowrap;
         }
 
+        .satellite-card {
+            background: #ffffff;
+            border: 0.5px solid #e0ddd6;
+            border-radius: 12px;
+            padding: 1.2rem;
+            margin-top: 1.25rem;
+        }
+
+        .satellite-copy {
+            color: #66665f;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            margin-bottom: 0.9rem;
+        }
+
         div[data-testid="stNumberInput"] input {
             background-color: #fcfcfa !important;
             border: 1px solid #d8d5ce !important;
@@ -192,15 +208,14 @@ def render_ai_workflow():
         return None
 
     @st.cache_data(show_spinner=False)
-    def get_city_names(country_name: str, region_name: str) -> list[str]:
+    def get_city_names(country_name: str, region_name: str = "") -> list[str]:
         if City is None:
             return []
         country_code = get_country_code(country_name)
-        region_code = get_region_code(country_name, region_name)
-        if not country_code or not region_code:
+        if not country_code:
             return []
-        try:
-            cities = City.get_cities_of_state(country_code, region_code)
+
+        def normalize_city_names(cities) -> list[str]:
             names = []
             seen = set()
             for city in cities:
@@ -209,6 +224,38 @@ def render_ai_workflow():
                     seen.add(name)
                     names.append(name)
             return sorted(names)
+
+        if region_name:
+            region_code = get_region_code(country_name, region_name)
+            if not region_code:
+                return []
+            try:
+                cities = City.get_cities_of_state(country_code, region_code)
+                return normalize_city_names(cities)
+            except Exception:
+                return []
+
+        try:
+            if hasattr(City, "get_cities_of_country"):
+                cities = City.get_cities_of_country(country_code)
+                return normalize_city_names(cities)
+        except Exception:
+            pass
+
+        if State is None:
+            return []
+
+        try:
+            all_cities = []
+            for state in State.get_states_of_country(country_code):
+                region_code = getattr(state, "iso_code", None)
+                if not region_code:
+                    continue
+                try:
+                    all_cities.extend(City.get_cities_of_state(country_code, region_code))
+                except Exception:
+                    continue
+            return normalize_city_names(all_cities)
         except Exception:
             return []
 
@@ -293,6 +340,9 @@ def render_ai_workflow():
     if "location_mode" not in st.session_state:
         st.session_state.location_mode = "By coordinates"
 
+    if "satellite_image_path" not in st.session_state:
+        st.session_state.satellite_image_path = None
+
     if (
         "lat_input" not in st.session_state
         or "lon_input" not in st.session_state
@@ -318,7 +368,7 @@ def render_ai_workflow():
             default_region = region_options_init[0] if region_options_init else ""
         st.session_state.place_region = default_region
 
-        city_options_init = get_city_names(default_country, default_region) if default_region else []
+        city_options_init = get_city_names(default_country, default_region)
         default_city = settings.get("city", "")
         if default_city not in city_options_init:
             default_city = city_options_init[0] if city_options_init else ""
@@ -334,9 +384,10 @@ def render_ai_workflow():
         is_country_city = st.session_state.location_mode == "By country and city"
 
         st.markdown(
-            """
+            f"""
             <style>
-            div[data-testid="stButton"][data-key="mode_coordinates"] button {{
+            div[data-testid="stButton"][data-key="mode_coordinates"] button,
+            div.st-key-mode_coordinates button {{
                 width: 100% !important;
                 border-radius: 12px !important;
                 min-height: 3rem !important;
@@ -353,7 +404,10 @@ def render_ai_workflow():
 
             div[data-testid="stButton"][data-key="mode_coordinates"] button:hover,
             div[data-testid="stButton"][data-key="mode_coordinates"] button:focus,
-            div[data-testid="stButton"][data-key="mode_coordinates"] button:focus-visible {{
+            div[data-testid="stButton"][data-key="mode_coordinates"] button:focus-visible,
+            div.st-key-mode_coordinates button:hover,
+            div.st-key-mode_coordinates button:focus,
+            div.st-key-mode_coordinates button:focus-visible {{
                 border: 2px solid #000000 !important;
                 background: #ffffff !important;
                 color: #1a1a18 !important;
@@ -361,7 +415,8 @@ def render_ai_workflow():
                 outline: none !important;
             }}
 
-            div[data-testid="stButton"][data-key="mode_country_city"] button {{
+            div[data-testid="stButton"][data-key="mode_country_city"] button,
+            div.st-key-mode_country_city button {{
                 width: 100% !important;
                 border-radius: 12px !important;
                 min-height: 3rem !important;
@@ -378,7 +433,10 @@ def render_ai_workflow():
 
             div[data-testid="stButton"][data-key="mode_country_city"] button:hover,
             div[data-testid="stButton"][data-key="mode_country_city"] button:focus,
-            div[data-testid="stButton"][data-key="mode_country_city"] button:focus-visible {{
+            div[data-testid="stButton"][data-key="mode_country_city"] button:focus-visible,
+            div.st-key-mode_country_city button:hover,
+            div.st-key-mode_country_city button:focus,
+            div.st-key-mode_country_city button:focus-visible {{
                 border: 2px solid #000000 !important;
                 background: #ffffff !important;
                 color: #1a1a18 !important;
@@ -458,6 +516,7 @@ def render_ai_workflow():
                     "region": st.session_state.ai_settings.get("region", ""),
                     "city": city,
                 }
+                st.session_state.satellite_image_path = None
                 st.session_state.sync_from_settings = True
                 st.rerun()
 
@@ -466,14 +525,21 @@ def render_ai_workflow():
 
             region_options = get_region_names(selected_country)
             if region_options:
-                if st.session_state.place_region not in region_options:
-                    st.session_state.place_region = region_options[0]
-                selected_region = st.selectbox("Region", options=region_options, key="place_region")
+                region_choices = [""] + region_options
+                if st.session_state.place_region not in region_choices:
+                    st.session_state.place_region = ""
+                selected_region = st.selectbox(
+                    "Region",
+                    options=region_choices,
+                    key="place_region",
+                    format_func=lambda region: region if region else "All regions (optional)",
+                )
             else:
                 selected_region = ""
-                st.selectbox("Region", options=["No regions found"], disabled=True)
+                st.session_state.place_region = ""
+                st.selectbox("Region", options=["No region filter needed"], disabled=True)
 
-            city_options = get_city_names(selected_country, selected_region) if selected_region else []
+            city_options = get_city_names(selected_country, selected_region)
             if city_options:
                 if st.session_state.place_city not in city_options:
                     st.session_state.place_city = city_options[0]
@@ -482,10 +548,10 @@ def render_ai_workflow():
                 selected_city = ""
                 st.selectbox("City", options=["No cities found"], disabled=True)
 
-            st.caption("Choose a country, then a region, then a city.")
+            st.caption("Choose a country, optionally filter by region, and then choose a city.")
 
             preview_lat, preview_lon = (None, None)
-            if selected_country and selected_region and selected_city:
+            if selected_country and selected_city:
                 preview_lat, preview_lon = geocode_place(selected_country, selected_region, selected_city)
 
             if st.button("Use selected place", use_container_width=True):
@@ -500,6 +566,7 @@ def render_ai_workflow():
                         "region": selected_region,
                         "city": selected_city,
                     }
+                    st.session_state.satellite_image_path = None
                     st.session_state.sync_from_settings = True
                     st.rerun()
 
@@ -572,3 +639,40 @@ def render_ai_workflow():
     )
 
     st.pydeck_chart(deck, use_container_width=True)
+
+    st.markdown('<div class="section-header">Satellite Image</div>', unsafe_allow_html=True)
+    st.markdown(
+        """
+        <div class="satellite-card">
+            <div class="satellite-copy">
+                Generate a stitched ESRI World Imagery snapshot for the currently selected area.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if st.button("Generate satellite image", use_container_width=True):
+        try:
+            with st.spinner("Generating satellite image..."):
+                image_path = download_satellite_image(
+                    lat=float(settings["latitude"]),
+                    lon=float(settings["longitude"]),
+                    zoom=int(settings["zoom"]),
+                    output_dir="images",
+                )
+            st.session_state.satellite_image_path = str(image_path)
+        except Exception as exc:
+            st.session_state.satellite_image_path = None
+            st.error(f"Could not generate the satellite image: {exc}")
+
+    if st.session_state.satellite_image_path:
+        st.image(
+            st.session_state.satellite_image_path,
+            caption=(
+                f'{settings["city"]}, {settings["country"]} '
+                f'({settings["latitude"]:.4f}, {settings["longitude"]:.4f})'
+            ),
+            use_container_width=True,
+        )
+        st.caption(f"Saved to `{st.session_state.satellite_image_path}`")
