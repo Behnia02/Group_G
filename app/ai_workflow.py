@@ -748,7 +748,7 @@ def render_dataset_snapshot_cards(snapshots: list[dict]) -> None:
                     (
                         '<div class="dataset-context-card">'
                         f'<div class="dataset-context-label">{label}</div>'
-                        f'<div class="dataset-context-value">{html.escape(f"{snap["latest_value"]:.2f}")}</div>'
+                        f'<div class="dataset-context-value">{html.escape("{:.2f}".format(snap["latest_value"]))}</div>'
                         f'<div class="dataset-context-delta {delta_class}">{html.escape(f"{delta:+.2f}")}</div>'
                         f'<div class="dataset-context-meta">Year: {html.escape(str(snap["latest_year"]))}</div>'
                         f'<div class="dataset-context-badge {badge_class}">{html.escape(direction.title())}</div>'
