@@ -330,7 +330,35 @@ def render_description_panel() -> None:
         return
 
     result = st.session_state.satellite_description_result
-    st.write(result["description"])
+    description = result["description"]
+    if isinstance(description, dict):
+        summary = str(description.get("summary", "")).strip()
+        dominant_land_cover = str(description.get("dominant_land_cover", "")).strip()
+
+        if summary:
+            st.write(summary)
+        else:
+            st.info("No natural-language summary was returned for this image.")
+
+        detail_bits = []
+        if dominant_land_cover:
+            detail_bits.append(f"Dominant land cover: {dominant_land_cover}")
+        vegetation_density = str(description.get("vegetation_density", "")).strip()
+        if vegetation_density:
+            detail_bits.append(f"Vegetation density: {vegetation_density}")
+        water_presence = str(description.get("water_presence", "")).strip()
+        if water_presence:
+            detail_bits.append(f"Water presence: {water_presence}")
+
+        if detail_bits:
+            for item in detail_bits:
+                st.markdown(
+                    f'<div class="description-detail">{html.escape(item)}</div>',
+                    unsafe_allow_html=True,
+                )
+            st.divider()
+    else:
+        st.write(description)
     st.caption(f"Model: `{result['model_name']}`")
     st.caption(f"Runtime: `{result['elapsed_seconds']}` seconds")
     st.caption(f"Prepared image: `{result['prepared_image_path']}`")
@@ -957,7 +985,46 @@ def compute_dataset_risk_score(snapshots: list[dict]) -> tuple[float, str]:
 
 def combine_risk_scores(model_result: dict, dataset_score: float, dataset_reason: str) -> dict:
     thresholds = get_risk_thresholds()
-    visual_score = float(model_result["overall_visual_risk"]["level"])
+    if "overall_visual_risk" in model_result:
+        visual_block = model_result["overall_visual_risk"]
+    else:
+        visual_level = float(model_result.get("visual_score", 0.0))
+        visual_block = {
+            "level": visual_level,
+            "label": "HIGH" if visual_level >= thresholds["high"] else "MODERATE" if visual_level >= thresholds["moderate"] else "LOW",
+            "reason": str(model_result.get("overall_risk", {}).get("reason", "")).strip()
+            or "Visual risk was computed from structured evidence.",
+        }
+
+    if "deforestation_risk" in model_result:
+        dimension_blocks = {
+            "deforestation_risk": model_result["deforestation_risk"],
+            "degradation_risk": model_result["degradation_risk"],
+            "fire_risk": model_result["fire_risk"],
+            "flood_risk": model_result["flood_risk"],
+            "fragmentation_risk": model_result["fragmentation_risk"],
+        }
+    else:
+        visual_evidence = model_result.get("visual_evidence", {})
+
+        def build_dimension_block(key: str) -> dict:
+            item = visual_evidence.get(key, {}) if isinstance(visual_evidence, dict) else {}
+            state = str(item.get("state", "unclear")).strip().lower()
+            score_map = {"none": 0.0, "unclear": 0.5, "present": 1.0}
+            return {
+                "level": score_map.get(state, 0.5),
+                "reason": str(item.get("reason", "")).strip() or "No reason provided.",
+            }
+
+        dimension_blocks = {
+            "deforestation_risk": build_dimension_block("vegetation_loss"),
+            "degradation_risk": build_dimension_block("land_degradation"),
+            "fire_risk": build_dimension_block("fire_signs"),
+            "flood_risk": build_dimension_block("water_anomaly"),
+            "fragmentation_risk": build_dimension_block("fragmentation"),
+        }
+
+    visual_score = float(visual_block["level"])
     final_score = round(0.6 * visual_score + 0.4 * dataset_score, 2)
 
     if final_score >= thresholds["high"]:
@@ -968,14 +1035,16 @@ def combine_risk_scores(model_result: dict, dataset_score: float, dataset_reason
         final_label = "LOW"
 
     final_reason = (
-        f"Visual evidence was assessed as {model_result['overall_visual_risk']['label']}. "
+        f"Visual evidence was assessed as {visual_block['label']}. "
         f"Dataset context score was {dataset_score:.2f}. "
-        f"{model_result['overall_visual_risk']['reason']} "
+        f"{visual_block['reason']} "
         f"{dataset_reason}"
     ).strip()
 
     return {
         **model_result,
+        "overall_visual_risk": visual_block,
+        **dimension_blocks,
         "dataset_context_risk": {
             "level": dataset_score,
             "reason": dataset_reason,
@@ -1208,6 +1277,13 @@ def _render_styles() -> None:
                 font-size: 0.95rem;
                 line-height: 1.5;
                 margin-bottom: 1rem;
+            }
+
+            .description-detail {
+                color: #7a7872;
+                font-size: 0.92rem;
+                line-height: 1.35;
+                margin: 0 0 0.35rem 0;
             }
 
             .risk-window-intro {

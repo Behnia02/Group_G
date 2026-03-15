@@ -426,6 +426,64 @@ def _normalize_environmental_assessment(data: dict) -> dict:
     }
 
 
+def _heuristic_environmental_assessment(image_description: str | dict) -> dict:
+    if not isinstance(image_description, dict):
+        return _normalize_environmental_assessment({})
+
+    def state_and_reason(value: str, *, present_values: set[str], none_values: set[str], present_reason: str, none_reason: str, unclear_reason: str) -> dict:
+        cleaned = str(value or "").strip().lower()
+        if cleaned in present_values:
+            return {"state": "present", "reason": present_reason}
+        if cleaned in none_values:
+            return {"state": "none", "reason": none_reason}
+        return {"state": "unclear", "reason": unclear_reason}
+
+    visual = {
+        "vegetation_loss": state_and_reason(
+            image_description.get("vegetation_density", ""),
+            present_values={"low"},
+            none_values={"high"},
+            present_reason="Sparse vegetation suggests possible vegetation loss or limited vegetative cover.",
+            none_reason="Dense vegetation does not suggest visible vegetation loss.",
+            unclear_reason="Vegetation condition is not clear enough to confirm visible vegetation loss.",
+        ),
+        "land_degradation": state_and_reason(
+            image_description.get("bare_soil_visibility", ""),
+            present_values={"medium", "high"},
+            none_values={"none", "low"},
+            present_reason="Visible bare soil suggests possible land degradation or exposed ground.",
+            none_reason="Bare-soil exposure does not appear strong enough to suggest degradation.",
+            unclear_reason="Bare-soil visibility is unclear, so land degradation remains uncertain.",
+        ),
+        "water_anomaly": state_and_reason(
+            image_description.get("water_appearance", ""),
+            present_values={"sediment_heavy"},
+            none_values={"clear", "dark", "unknown", ""},
+            present_reason="Water appearance suggests a possible anomaly such as sediment-heavy flow.",
+            none_reason="Water appearance does not show a clear anomaly.",
+            unclear_reason="Water conditions are too unclear to judge anomaly risk confidently.",
+        ),
+        "fire_signs": state_and_reason(
+            image_description.get("fire_or_smoke_visibility", ""),
+            present_values={"possible", "clear"},
+            none_values={"none"},
+            present_reason="The description suggests possible fire, smoke, or burn-related evidence.",
+            none_reason="No visible signs of fire or smoke were identified.",
+            unclear_reason="Fire or smoke evidence is unclear in the description.",
+        ),
+        "fragmentation": state_and_reason(
+            image_description.get("fragmentation_visibility", ""),
+            present_values={"medium", "high"},
+            none_values={"none", "low"},
+            present_reason="Fragmentation appears visible in the described land-cover pattern.",
+            none_reason="Fragmentation does not appear strong in the described scene.",
+            unclear_reason="Fragmentation remains uncertain from the available description.",
+        ),
+    }
+
+    return _normalize_environmental_assessment({"visual_evidence": visual, "context_evidence": {}, "overall_reason": "Risk evidence was derived from the structured image description because the model did not return valid JSON."})
+
+
 # Structured image description with Ollama
 # We now standardize the image output as JSON instead of free text.
 
@@ -623,6 +681,7 @@ Dataset context:
         json={
             "model": model_name,
             "stream": False,
+            "format": "json",
             "messages": [{"role": "user", "content": prompt}],
             "options": {"temperature": 0},
         },
@@ -636,16 +695,16 @@ Dataset context:
     try:
         parsed = json.loads(content)
     except json.JSONDecodeError:
-        extracted = _extract_first_json_object(content)
         try:
+            extracted = _extract_first_json_object(content)
             parsed = json.loads(extracted)
+        except RuntimeError:
+            return _heuristic_environmental_assessment(image_description)
         except json.JSONDecodeError:
             repaired = _repair_common_json_escapes(extracted)
             try:
                 parsed = json.loads(repaired)
             except json.JSONDecodeError as exc:
-                raise RuntimeError(
-                    f"Ollama returned malformed JSON for risk assessment: {exc}"
-                ) from exc
+                return _heuristic_environmental_assessment(image_description)
 
     return _normalize_environmental_assessment(parsed)
