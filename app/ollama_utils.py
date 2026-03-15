@@ -216,6 +216,120 @@ def describe_image_with_ollama(
     }
 
 
+def _extract_first_json_object(text: str) -> str:
+    start = text.find("{")
+    if start == -1:
+        raise RuntimeError("Ollama did not return JSON.")
+
+    depth = 0
+    in_string = False
+    escape = False
+
+    for i in range(start, len(text)):
+        ch = text[i]
+
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+        else:
+            if ch == '"':
+                in_string = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[start:i + 1]
+
+    raise RuntimeError("Could not extract a complete JSON object from the model output.")
+
+
+def _repair_common_json_escapes(text: str) -> str:
+    # Fix invalid backslashes that are not valid JSON escapes.
+    return re.sub(r'\\(?!["\\/bfnrtu])', r"\\\\", text)
+
+
+def _coerce_risk_item(data: dict | None) -> dict:
+    data = data if isinstance(data, dict) else {}
+    level = data.get("level", 0)
+    reason = data.get("reason", "")
+
+    try:
+        level = float(level)
+    except (TypeError, ValueError):
+        level = 0.0
+
+    return {
+        "level": level,
+        "reason": str(reason).strip(),
+    }
+
+
+def _fallback_reason(key: str, level: float) -> str:
+    low_reasons = {
+        "deforestation_risk": "No clear signs of deforestation are visible in the image.",
+        "degradation_risk": "No clear signs of land degradation or erosion are visible in the image.",
+        "fire_risk": "No clear signs of wildfire, burn scars, or smoke are visible in the image.",
+        "flood_risk": "No clear signs of flooding or unusual water spread are visible in the image.",
+        "fragmentation_risk": "No clear signs of habitat fragmentation or disruptive land-use change are visible in the image.",
+    }
+    elevated_reasons = {
+        "deforestation_risk": "The image suggests possible vegetation loss or forest disturbance.",
+        "degradation_risk": "The image suggests possible land degradation, bare soil exposure, or erosion.",
+        "fire_risk": "The image suggests possible burn scars, smoke, or wildfire impact.",
+        "flood_risk": "The image suggests possible flooding, water spread, or sediment-heavy water.",
+        "fragmentation_risk": "The image suggests possible habitat fragmentation, urban sprawl, or ecosystem disturbance.",
+    }
+    return elevated_reasons.get(key, "") if level > 0 else low_reasons.get(key, "")
+
+
+def _normalize_visual_label(level: float, label: str | None) -> str:
+    cleaned = str(label or "").strip().upper()
+    if cleaned in {"LOW", "MODERATE", "HIGH"}:
+        return cleaned
+    if level >= 1.4:
+        return "HIGH"
+    if level >= 0.75:
+        return "MODERATE"
+    return "LOW"
+
+
+def _normalize_structured_risk_response(data: dict) -> dict:
+    normalized = {}
+    for key in [
+        "deforestation_risk",
+        "degradation_risk",
+        "fire_risk",
+        "flood_risk",
+        "fragmentation_risk",
+    ]:
+        item = _coerce_risk_item(data.get(key))
+        if not item["reason"]:
+            item["reason"] = _fallback_reason(key, item["level"])
+        normalized[key] = item
+
+    overall_raw = data.get("overall_visual_risk")
+    if not isinstance(overall_raw, dict):
+        component_levels = [item["level"] for item in normalized.values()]
+        inferred_level = round(sum(component_levels) / len(component_levels), 2) if component_levels else 0.0
+        overall_raw = {
+            "level": inferred_level,
+            "label": _normalize_visual_label(inferred_level, None),
+            "reason": "Overall visual risk was inferred from the individual dimension scores.",
+        }
+
+    overall = _coerce_risk_item(overall_raw)
+    overall["label"] = _normalize_visual_label(overall["level"], overall_raw.get("label"))
+    overall["reason"] = str(overall_raw.get("reason", overall["reason"])).strip()
+    normalized["overall_visual_risk"] = overall
+
+    return normalized
+
+
 def assess_environmental_risk_structured(
     image_description: str,
     dataset_context: str,
@@ -230,22 +344,26 @@ def assess_environmental_risk_structured(
 You are an environmental risk analyst.
 
 You will receive:
-1. A satellite-image description.
-2. Country-level environmental indicator context.
+1.⁠ ⁠A satellite-image description.
+2.⁠ ⁠Country-level environmental indicator context.
 
 Assess environmental danger behind the scenes using these hidden questions:
-- Does the description suggest recent deforestation or strong vegetation loss?
-- Does it suggest land degradation, erosion, bare soil exposure, or stressed land cover?
-- Does it suggest flooding, unusual water spread, or sediment-heavy water?
-- Does it suggest wildfire, burn scars, or smoke?
-- Does it suggest habitat fragmentation, urban sprawl, mining, or ecosystem disturbance?
-- Does the country-level context indicate that forest change, degradation, or weak protection may increase concern?
+•⁠  ⁠Does the description suggest recent deforestation or strong vegetation loss?
+•⁠  ⁠Does it suggest land degradation, erosion, bare soil exposure, or stressed land cover?
+•⁠  ⁠Does it suggest flooding, unusual water spread, or sediment-heavy water?
+•⁠  ⁠Does it suggest wildfire, burn scars, or smoke?
+•⁠  ⁠Does it suggest habitat fragmentation, urban sprawl, mining, or ecosystem disturbance?
+•⁠  ⁠Does the country-level context indicate that forest change, degradation, or weak protection may increase concern?
 
 Important:
-- Image evidence is local.
-- Dataset context is national and historical.
-- Do not treat national context as exact proof for the local site.
-- Be cautious and factual.
+•⁠  ⁠Image evidence is local.
+•⁠  ⁠Dataset context is national and historical.
+•⁠  ⁠Do not treat national context as exact proof for the local site.
+•⁠  ⁠Be cautious and factual.
+•⁠  ⁠Return ONLY JSON.
+•⁠  ⁠Do not use markdown.
+•⁠  ⁠Do not include code fences.
+•⁠  ⁠Do not include backslashes unless required by valid JSON escaping.
 
 Return ONLY valid JSON with exactly this schema:
 
@@ -257,14 +375,6 @@ Return ONLY valid JSON with exactly this schema:
   "fragmentation_risk": {{"level": 0, "reason": ""}},
   "overall_visual_risk": {{"level": 0, "label": "LOW", "reason": ""}}
 }}
-
-Rules:
-- Use level 0 for no clear sign / low concern
-- Use level 1 for possible or moderate concern
-- Use level 2 for strong concern
-- overall_visual_risk.label must be one of: LOW, MODERATE, HIGH
-- No markdown
-- No extra text outside JSON
 
 Image description:
 {image_description}
@@ -285,14 +395,23 @@ Dataset context:
     )
 
     content = response.get("message", {}).get("content", "").strip()
-
     if not content:
         raise RuntimeError(DEFAULT_TIMEOUT_MESSAGE)
 
     try:
-        return json.loads(content)
+        return _normalize_structured_risk_response(json.loads(content))
     except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", content, re.DOTALL)
-        if match:
-            return json.loads(match.group(0))
-        raise RuntimeError("Ollama returned invalid JSON for risk assessment.")
+        pass
+
+    extracted = _extract_first_json_object(content)
+
+    try:
+        return _normalize_structured_risk_response(json.loads(extracted))
+    except json.JSONDecodeError:
+        repaired = _repair_common_json_escapes(extracted)
+        try:
+            return _normalize_structured_risk_response(json.loads(repaired))
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                f"Ollama returned malformed JSON for risk assessment: {exc}"
+            ) from exc

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import math
 import unicodedata
 
@@ -142,7 +143,7 @@ def render_ai_workflow(data) -> None:
         st.error(f"Could not generate the satellite image: {st.session_state.satellite_analysis_error}")
 
     if st.session_state.satellite_image_path:
-        image_col, analysis_col = st.columns([1.8, 1], gap="large")
+        image_col, analysis_col = st.columns([1.55, 1], gap="large")
 
         with image_col:
             st.image(
@@ -160,18 +161,6 @@ def render_ai_workflow(data) -> None:
 
     if st.session_state.satellite_description_result:
         result = st.session_state.satellite_description_result
-
-        st.divider()
-        st.subheader("Image description")
-        st.write(result["description"])
-
-        meta_left, meta_right = st.columns(2)
-        with meta_left:
-            st.caption(f"Model: `{result['model_name']}`")
-            st.caption(f"Prepared image: `{result['prepared_image_path']}`")
-        with meta_right:
-            st.caption(f"Runtime: `{result['elapsed_seconds']}` seconds")
-            st.caption(f"Original image: `{result['original_image_path']}`")
 
         st.divider()
         st.subheader("Environmental risk")
@@ -215,7 +204,7 @@ def render_ai_workflow(data) -> None:
                 st.session_state.risk_snapshots = []
                 st.session_state.risk_context_text = ""
                 st.session_state.satellite_analysis_error = str(exc)
-                status_box.error(f"Risk assessment failed: {exc}")
+                status_box.empty()
 
         if st.session_state.satellite_analysis_error and not st.session_state.risk_result:
             st.error(f"Could not assess environmental risk: {st.session_state.satellite_analysis_error}")
@@ -228,16 +217,8 @@ def render_ai_workflow(data) -> None:
 
 
 def render_description_panel() -> None:
-    st.markdown(
-        """
-        <div class="analysis-panel">
-            <div class="analysis-intro">
-                Run a local Ollama vision model on the generated satellite image to create a factual image description.
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.markdown("#### Image description")
+    st.caption("Run a local Ollama vision model on the generated satellite image.")
 
     if not ollama_is_available():
         st.warning("Ollama is not reachable. Start the Ollama app first.")
@@ -280,8 +261,17 @@ def render_description_panel() -> None:
 
     if st.session_state.satellite_analysis_error and not st.session_state.satellite_description_result:
         st.error(f"Could not describe the satellite image: {st.session_state.satellite_analysis_error}")
-    elif not st.session_state.satellite_description_result:
+        return
+
+    if not st.session_state.satellite_description_result:
         st.info("Click the button to generate a description.")
+        return
+
+    result = st.session_state.satellite_description_result
+    st.write(result["description"])
+    st.caption(f"Model: `{result['model_name']}`")
+    st.caption(f"Runtime: `{result['elapsed_seconds']}` seconds")
+    st.caption(f"Prepared image: `{result['prepared_image_path']}`")
 
 
 def render_location_preview(settings: dict) -> None:
@@ -369,7 +359,12 @@ def render_sidebar_controls(country_options: list[str]) -> None:
         st.session_state.location_mode = "By country and city"
         st.rerun()
 
-    st.slider("Zoom", min_value=1, max_value=20, key="zoom_input")
+    previous_zoom = int(st.session_state.ai_settings["zoom"])
+    current_zoom = st.slider("Zoom", min_value=1, max_value=20, key="zoom_input")
+
+    if current_zoom != previous_zoom:
+        st.session_state.ai_settings["zoom"] = int(current_zoom)
+        reset_generated_outputs()
 
     if st.session_state.location_mode == "By coordinates":
         render_coordinate_selector()
@@ -554,7 +549,7 @@ def render_risk_window(risk_result: dict, snapshots: list[dict]) -> None:
     st.markdown("### Risk traffic light")
     render_risk_traffic_light(final_label)
 
-    left, right = st.columns([1.3, 1], gap="large")
+    left, right = st.columns([1.05, 1.15], gap="large")
 
     with left:
         st.markdown("#### Final reasoning")
@@ -564,9 +559,10 @@ def render_risk_window(risk_result: dict, snapshots: list[dict]) -> None:
         render_dimension_table(risk_result)
 
     with right:
-        st.markdown("#### Dataset trend context")
+        st.markdown(f"#### Dataset trend context of {st.session_state.ai_settings['country']}")
         render_dataset_snapshot_cards(snapshots)
 
+    st.markdown('<div class="technical-context-gap"></div>', unsafe_allow_html=True)
     with st.expander("Show technical context used for the model"):
         st.code(st.session_state.risk_context_text, language="text")
 
@@ -615,8 +611,36 @@ def render_dimension_table(risk_result: dict) -> None:
         ("Fragmentation", risk_result["fragmentation_risk"]["level"], risk_result["fragmentation_risk"]["reason"]),
     ]
 
-    df = pd.DataFrame(rows, columns=["Dimension", "Level", "Reason"])
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    body_rows = []
+    for dimension, level, reason in rows:
+        reason_text = str(reason).strip() or "No reason provided."
+        body_rows.append(
+            (
+                '<div class="risk-grid-row">'
+                '<div class="risk-grid-cell risk-grid-dimension">{dimension}</div>'
+                '<div class="risk-grid-cell risk-grid-level-cell"><span class="risk-level-pill">{level}</span></div>'
+                '<div class="risk-grid-cell risk-grid-reason">{reason}</div>'
+                "</div>"
+            ).format(
+                dimension=html.escape(str(dimension)),
+                level=html.escape(f"{float(level):.1f}"),
+                reason=html.escape(reason_text),
+            )
+        )
+
+    st.markdown(
+        (
+            '<div class="risk-grid-table">'
+            '<div class="risk-grid risk-grid-header-row">'
+            '<div class="risk-grid-header">Dimension</div>'
+            '<div class="risk-grid-header">Level</div>'
+            '<div class="risk-grid-header">Reason</div>'
+            '</div>'
+            '{rows}'
+            '</div>'
+        ).format(rows="".join(body_rows)),
+        unsafe_allow_html=True,
+    )
 
 
 def render_dataset_snapshot_cards(snapshots: list[dict]) -> None:
@@ -624,18 +648,52 @@ def render_dataset_snapshot_cards(snapshots: list[dict]) -> None:
         st.info("No dataset context available for this country.")
         return
 
-    cols = st.columns(len(snapshots))
-    for col, snap in zip(cols, snapshots):
-        delta = snap["trend_delta"]
-        direction = interpret_trend_direction(snap["indicator"], delta)
+    for index in range(0, len(snapshots), 2):
+        cols = st.columns(2, gap="medium")
 
-        with col:
-            st.metric(
-                label=snap["label"],
-                value=f"{snap['latest_value']:.2f}",
-                delta=f"{delta:+.2f}",
-            )
-            st.caption(f"{direction} · {snap['latest_year']}")
+        for col, snap in zip(cols, snapshots[index:index + 2]):
+            with col:
+                label = html.escape(str(snap["label"]))
+
+                if snap.get("missing", False) or snap.get("latest_value") is None:
+                    st.markdown(
+                        (
+                            '<div class="dataset-context-card">'
+                            f'<div class="dataset-context-label">{label}</div>'
+                            '<div class="dataset-context-value">No data available</div>'
+                            '<div class="dataset-context-meta">Year: -</div>'
+                            '<div class="dataset-context-badge is-missing">No data</div>'
+                            "</div>"
+                        ),
+                        unsafe_allow_html=True,
+                    )
+                    continue
+
+                delta = snap["trend_delta"]
+                direction = interpret_trend_direction(snap["indicator"], delta)
+                badge_class = {
+                    "improving": "is-improving",
+                    "worsening": "is-worsening",
+                    "stable": "is-stable",
+                }.get(direction, "is-stable")
+                delta_class = {
+                    "improving": "is-improving",
+                    "worsening": "is-worsening",
+                    "stable": "is-stable",
+                }.get(direction, "is-stable")
+
+                st.markdown(
+                    (
+                        '<div class="dataset-context-card">'
+                        f'<div class="dataset-context-label">{label}</div>'
+                        f'<div class="dataset-context-value">{html.escape(f"{snap["latest_value"]:.2f}")}</div>'
+                        f'<div class="dataset-context-delta {delta_class}">{html.escape(f"{delta:+.2f}")}</div>'
+                        f'<div class="dataset-context-meta">Year: {html.escape(str(snap["latest_year"]))}</div>'
+                        f'<div class="dataset-context-badge {badge_class}">{html.escape(direction.title())}</div>'
+                        "</div>"
+                    ),
+                    unsafe_allow_html=True,
+                )
 
 
 def interpret_trend_direction(indicator: str, delta: float) -> str:
@@ -678,10 +736,15 @@ def get_country_indicator_snapshot(data, country_name: str, indicator: str) -> d
     for year in years:
         gdf = data.get_geodata(indicator, year)
         name_col = _find_country_name_column(gdf)
+
         if name_col is None or indicator not in gdf.columns:
             continue
 
-        row = gdf[gdf[name_col].astype(str).str.lower() == country_name.lower()]
+        dataset_country_name = resolve_country_in_dataframe(country_name, gdf[name_col])
+        if dataset_country_name is None:
+            continue
+
+        row = gdf[gdf[name_col].astype(str) == dataset_country_name]
         if row.empty:
             continue
 
@@ -727,9 +790,24 @@ def build_dataset_context(data, country_name: str) -> tuple[str, list[dict]]:
 
     for indicator in INDICATORS_FOR_CONTEXT:
         snapshot = get_country_indicator_snapshot(data, country_name, indicator)
+
         if snapshot is None:
+            snapshots.append(
+                {
+                    "indicator": indicator,
+                    "label": INDICATOR_LABELS[indicator],
+                    "latest_year": None,
+                    "latest_value": None,
+                    "latest_percentile": None,
+                    "trend_delta": None,
+                    "series": [],
+                    "missing": True,
+                }
+            )
+            lines.append(f"- {INDICATOR_LABELS[indicator]}: no data available")
             continue
 
+        snapshot["missing"] = False
         snapshots.append(snapshot)
 
         value = snapshot["latest_value"]
@@ -755,24 +833,34 @@ def compute_dataset_risk_score(snapshots: list[dict]) -> tuple[float, str]:
     reasons = []
 
     for snap in snapshots:
+        if not snap:
+            continue
+
         indicator = snap["indicator"]
-        pct = snap["latest_percentile"]
-        delta = snap["trend_delta"]
+        pct = snap.get("latest_percentile")
+        delta = snap.get("trend_delta", 0.0)
+        latest_value = snap.get("latest_value")
 
         sev = 0.0
+
+        if latest_value is None:
+            continue
+
         if pct is not None:
             if indicator in {"annual_deforestation", "land_degraded"}:
                 if pct >= 80:
                     sev += 1.2
                 elif pct >= 60:
                     sev += 0.7
+
             elif indicator in {"land_protected", "mountain_ecosystems"}:
                 if pct <= 20:
                     sev += 1.0
                 elif pct <= 40:
                     sev += 0.5
+
             elif indicator == "forest_area_change":
-                if snap["latest_value"] < 0:
+                if latest_value < 0:
                     sev += 0.8
                 if pct <= 20:
                     sev += 0.4
@@ -780,13 +868,14 @@ def compute_dataset_risk_score(snapshots: list[dict]) -> tuple[float, str]:
         worsening = False
         if indicator in {"annual_deforestation", "land_degraded"} and delta > 0:
             worsening = True
-        if indicator in {"forest_area_change", "land_protected", "mountain_ecosystems"} and delta < 0:
+        elif indicator in {"forest_area_change", "land_protected", "mountain_ecosystems"} and delta < 0:
             worsening = True
 
         if worsening:
             sev += 0.4
 
-        score_parts.append(min(sev, 2.0))
+        sev = min(sev, 2.0)
+        score_parts.append(sev)
 
         if sev >= 1.0:
             reasons.append(f"{snap['label']} suggests elevated concern.")
@@ -794,12 +883,12 @@ def compute_dataset_risk_score(snapshots: list[dict]) -> tuple[float, str]:
             reasons.append(f"{snap['label']} adds moderate context risk.")
 
     if not score_parts:
-        return 0.0, "The available dataset context did not indicate elevated concern."
+        return 0.0, "Some indicators were missing, and the available dataset context did not indicate elevated concern."
 
     score = round(sum(score_parts) / len(score_parts), 2)
 
     if not reasons:
-        reasons.append("The historical country-level indicators do not strongly signal risk.")
+        reasons.append("The available historical indicators do not strongly signal risk.")
 
     return score, " ".join(reasons)
 
@@ -935,6 +1024,88 @@ def _render_styles() -> None:
                 line-height: 1.5;
             }
 
+            .risk-grid-table {
+                border: 0.5px solid #e0ddd6;
+                border-radius: 12px;
+                overflow: hidden;
+                background: #ffffff;
+            }
+
+            .risk-grid {
+                display: grid;
+                grid-template-columns: 1.15fr 0.7fr 3.05fr;
+                background: #f7f7f5;
+            }
+
+            .risk-grid-header {
+                padding: 0.95rem 1rem;
+                color: #66665f;
+                font-size: 0.76rem;
+                font-weight: 700;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                border-right: 0.5px solid #e0ddd6;
+            }
+
+            .risk-grid-header:last-child {
+                border-right: none;
+            }
+
+            .risk-grid-row {
+                display: grid;
+                grid-template-columns: 1.15fr 0.7fr 3.05fr;
+                background: #ffffff;
+            }
+
+            .risk-grid-cell {
+                background: #ffffff;
+                border-bottom: 0.5px solid #e0ddd6;
+                border-right: 0.5px solid #e0ddd6;
+                padding: 1rem;
+                color: #1f1f1c;
+                font-size: 0.94rem;
+                line-height: 1.55;
+                min-height: 100%;
+            }
+
+            .risk-grid-row .risk-grid-cell:last-child {
+                border-right: none;
+            }
+
+            .risk-grid-table .risk-grid-row:last-child .risk-grid-cell {
+                border-bottom: none;
+            }
+
+            .risk-grid-dimension {
+                font-weight: 500;
+            }
+
+            .risk-grid-level-cell {
+                display: flex;
+                align-items: center;
+            }
+
+            .risk-grid-reason {
+                white-space: normal;
+                word-break: break-word;
+                overflow-wrap: anywhere;
+            }
+
+            .risk-level-pill {
+                display: inline-block;
+                min-width: 2.3rem;
+                padding: 0.2rem 0.55rem;
+                border-radius: 999px;
+                background: #f1efe9;
+                border: 1px solid #ddd8cf;
+                font-weight: 700;
+                text-align: center;
+            }
+
+            .technical-context-gap {
+                height: 1.25rem;
+            }
+
             .view-link-btn {
                 display: inline-block;
                 text-decoration: none !important;
@@ -1004,6 +1175,92 @@ def _render_styles() -> None:
                 color: #66665f;
                 font-size: 0.95rem;
                 line-height: 1.5;
+            }
+
+            .dataset-context-card {
+                background: #ffffff;
+                border: 0.5px solid #e0ddd6;
+                border-radius: 12px;
+                padding: 0.95rem 1rem;
+                margin-bottom: 0.8rem;
+                min-height: 12.2rem;
+            }
+
+            .dataset-context-label {
+                color: #66665f;
+                font-size: 0.82rem;
+                font-weight: 700;
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                margin-bottom: 0.45rem;
+                white-space: normal;
+                word-break: break-word;
+                overflow-wrap: anywhere;
+            }
+
+            .dataset-context-value {
+                color: #1f1f1c;
+                font-family: 'Lora', serif;
+                font-size: 1.55rem;
+                line-height: 1.1;
+                margin-bottom: 0.35rem;
+                white-space: normal;
+                word-break: break-word;
+                overflow-wrap: anywhere;
+            }
+
+            .dataset-context-delta {
+                font-size: 1rem;
+                font-weight: 600;
+                margin-bottom: 0.2rem;
+            }
+
+            .dataset-context-delta.is-improving {
+                color: #1f6b3a;
+            }
+
+            .dataset-context-delta.is-worsening {
+                color: #a23d3d;
+            }
+
+            .dataset-context-delta.is-stable {
+                color: #1f1f1c;
+            }
+
+            .dataset-context-meta {
+                color: #7a7872;
+                font-size: 0.95rem;
+                margin-bottom: 0.45rem;
+            }
+
+            .dataset-context-badge {
+                display: inline-block;
+                padding: 0.35rem 0.7rem;
+                border-radius: 999px;
+                font-size: 0.82rem;
+                font-weight: 700;
+                border: 1px solid transparent;
+                margin-top: 0.2rem;
+                align-self: flex-start;
+            }
+
+            .dataset-context-badge.is-improving {
+                background: #dff3e5;
+                border-color: #bddfc7;
+                color: #1f6b3a;
+            }
+
+            .dataset-context-badge.is-worsening {
+                background: #f9d4d4;
+                border-color: #eab5b5;
+                color: #a23d3d;
+            }
+
+            .dataset-context-badge.is-stable,
+            .dataset-context-badge.is-missing {
+                background: #f1efe9;
+                border-color: #ddd8cf;
+                color: #66665f;
             }
 
             div[data-testid="stNumberInput"] input {
@@ -1126,6 +1383,28 @@ def safe_text(text: str, fallback: str = "Unknown") -> str:
     cleaned = ascii_text(text)
     return cleaned if cleaned else fallback
 
+def normalize_text(text: str) -> str:
+    return safe_text(text, fallback="").lower().replace("&", "and").strip()
+
+
+def resolve_country_in_dataframe(country_name: str, country_series: pd.Series) -> str | None:
+    target = normalize_text(country_name)
+
+    raw_names = country_series.dropna().astype(str).unique().tolist()
+    normalized_map = {normalize_text(name): name for name in raw_names}
+
+    if target in normalized_map:
+        return normalized_map[target]
+
+    contains_matches = [
+        original
+        for norm, original in normalized_map.items()
+        if target in norm or norm in target
+    ]
+    if contains_matches:
+        return contains_matches[0]
+
+    return None
 
 @st.cache_data(show_spinner=False)
 def get_country_names() -> list[str]:
