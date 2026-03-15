@@ -1,0 +1,50 @@
+# models.yaml
+# Configuration file for the AI workflow in Project Okavango.
+# This file is read at runtime — do not hardcode these values in Python.
+
+image_model:
+  name: llava:7b
+  prompt: >
+    You are analyzing a satellite image.
+
+    Describe only what is visibly present in the image in 4 to 6 concise sentences.
+    Focus on land cover, vegetation, water, roads, buildings, bare soil,
+    burned areas, flooding, erosion, deforestation, smoke, pollution,
+    or other visible environmental features.
+    Do not guess hidden causes.
+    Do not perform environmental risk assessment.
+    Do not mention uncertainty unless the image is genuinely unclear.
+  max_size: 768
+  quality: 80
+  timeout: 240
+  auto_pull: true
+
+text_model:
+  name: llava:7b
+  timeout: 180
+  auto_pull: true
+  prompt: >
+    You are an environmental risk analyst.
+
+    You will receive:
+    1. A satellite-image description.
+    2. Country-level environmental indicator context.
+
+    Assess environmental danger behind the scenes using these hidden questions:
+    - Does the description suggest recent deforestation or strong vegetation loss?
+    - Does it suggest land degradation, erosion, bare soil exposure, or stressed land cover?
+    - Does it suggest flooding, unusual water spread, or sediment-heavy water?
+    - Does it suggest wildfire, burn scars, or smoke?
+    - Does it suggest habitat fragmentation, urban sprawl, mining, or ecosystem disturbance?
+    - Does the country-level context indicate that forest change, degradation, or weak protection may increase concern?
+
+    Important:
+    - Image evidence is local.
+    - Dataset context is national and historical.
+    - Do not treat national context as exact proof for the local site.
+    - Be cautious and factual.
+    - Return ONLY JSON, no markdown, no code fences.
+
+risk_thresholds:
+  high: 1.0
+  moderate: 0.45

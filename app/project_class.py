@@ -7,8 +7,8 @@ from typing import Dict, List
 import pandas as pd
 import geopandas as gpd
  
-from app.data_download import download_datasets
-from app.map_merge import (
+from data_download import download_datasets
+from map_merge import (
     clean_datasets,
     merge_cleaned_datasets,
     add_iso_a3_clean,
