@@ -6,25 +6,25 @@ image_model:
   prompt: >
     You are analyzing a satellite image.
 
+    Answer the following hidden questions based only on what is visibly present in the image:
+    - What is the dominant land cover?
+    - Is vegetation dense, medium, sparse, patchy, continuous, or fragmented?
+    - Is bare soil visible? If yes, how much?
+    - Is water visible? If yes, how much and what does it look like?
+    - Are roads, buildings, linear clearings, or other human disturbances visible?
+    - Are there visible signs of fragmentation or abrupt land-cover transitions?
+    - Are there visible signs of fire, smoke, or burn scars?
+
+    Important rules:
+    - Do not guess hidden causes.
+    - Do not perform environmental risk assessment.
+    - Describe only what is visible.
+    - If something is not clearly visible, use "unknown".
+    - Be conservative and factual.
+
     Return ONLY valid JSON.
     Do not use markdown.
     Do not include code fences.
-    Do not guess hidden causes.
-    Do not perform environmental risk assessment.
-    Describe only what is visibly present.
-
-    Look for both obvious and subtle visual features, including:
-    - dominant land cover
-    - vegetation density and vegetation pattern
-    - patchiness or vegetation interruption
-    - bare soil exposure
-    - water presence and water appearance
-    - visible roads, buildings, linear clearings, or other human disturbance
-    - signs of fragmentation or land-cover transitions
-    - visible burn scars, smoke, or ash if present
-
-    Use conservative wording.
-    If something is not clearly visible, say "unknown" instead of guessing.
 
     Return exactly this JSON schema:
     {
@@ -66,6 +66,20 @@ text_model:
     1. Visual evidence from the image description
     2. Country-level context evidence from the dataset
 
+    Assess environmental danger behind the scenes using these hidden questions.
+
+    Questions for visual evidence:
+    - Does the image description suggest vegetation loss, sparse cover, or stressed vegetation?
+    - Does it suggest land degradation, erosion, exposed soil, or disturbed ground?
+    - Does it suggest flooding, unusual water spread, sediment-heavy water, or abnormal water appearance?
+    - Does it suggest fire, smoke, burn scars, or thermal disturbance?
+    - Does it suggest fragmentation, human disturbance, linear clearings, roads, urban sprawl, mining, or abrupt land-cover transitions?
+
+    Questions for country-level context evidence:
+    - Does the country-level context suggest meaningful forest change pressure?
+    - Does it suggest meaningful land degradation pressure?
+    - Does it suggest weak protection, ecosystem pressure, or a protection gap?
+
     Important rules:
     - Keep visual evidence and context evidence separate.
     - Image evidence is local.
@@ -75,17 +89,9 @@ text_model:
     - Only classify evidence states and explain them briefly.
     - Use conservative reasoning.
     - If the evidence is absent, use "none".
-    - If the evidence is ambiguous or incomplete, use "unclear".
+    - If the evidence is ambiguous, partial, or incomplete, use "unclear".
     - If the evidence is supported by the description or context, use "present".
-
-    For visual evidence, consider not only extreme disaster signs but also moderate environmental stress such as:
-    - patchy or interrupted vegetation
-    - exposed soil
-    - fragmented land cover
-    - unusual land transitions
-    - human disturbance
-    - sediment-heavy or unusual water appearance
-    - linear clearings, roads, sprawl, or other ecosystem pressure
+    - Consider not only extreme disaster signs but also moderate environmental stress.
 
     Return ONLY valid JSON.
     Do not use markdown.

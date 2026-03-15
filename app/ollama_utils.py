@@ -561,6 +561,20 @@ Your task has two separate groups:
 1. Visual evidence from the image description
 2. Country-level context evidence from the dataset
 
+Assess environmental danger behind the scenes using these hidden questions.
+
+Questions for visual evidence:
+- Does the image description suggest vegetation loss, sparse cover, or stressed vegetation?
+- Does it suggest land degradation, erosion, exposed soil, or disturbed ground?
+- Does it suggest flooding, unusual water spread, sediment-heavy water, or abnormal water appearance?
+- Does it suggest fire, smoke, burn scars, or thermal disturbance?
+- Does it suggest fragmentation, human disturbance, linear clearings, roads, urban sprawl, mining, or abrupt land-cover transitions?
+
+Questions for country-level context evidence:
+- Does the country-level context suggest meaningful forest change pressure?
+- Does it suggest meaningful land degradation pressure?
+- Does it suggest weak protection, ecosystem pressure, or a protection gap?
+
 Important rules:
 - Keep visual evidence and context evidence separate.
 - Image evidence is local.
@@ -570,17 +584,9 @@ Important rules:
 - Only classify evidence states and explain them briefly.
 - Use conservative reasoning.
 - If the evidence is absent, use "none".
-- If the evidence is ambiguous or incomplete, use "unclear".
+- If the evidence is ambiguous, partial, or incomplete, use "unclear".
 - If the evidence is supported by the description or context, use "present".
-
-For visual evidence, consider not only extreme disaster signs but also moderate environmental stress such as:
-- patchy or interrupted vegetation
-- exposed soil
-- fragmented land cover
-- unusual land transitions
-- human disturbance
-- sediment-heavy or unusual water appearance
-- linear clearings, roads, sprawl, or other ecosystem pressure
+- Consider not only extreme disaster signs but also moderate environmental stress.
 
 Return ONLY valid JSON.
 Do not use markdown.
