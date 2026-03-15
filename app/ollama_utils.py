@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# Imports and shared constants
+
 import base64
 import json
 import re
@@ -26,13 +28,17 @@ VISION_MODEL_HINTS = (
 )
 
 
+# Typed result schema for the structured image step
+
 class ImageDescriptionResult(TypedDict):
-    description: str
+    description: dict
     model_name: str
     original_image_path: str
     prepared_image_path: str
     elapsed_seconds: float
 
+
+# Low-level Ollama request helper
 
 def _request(
     method: str,
@@ -62,6 +68,8 @@ def _request(
     except ValueError as exc:
         raise RuntimeError("Ollama returned an invalid response.") from exc
 
+
+# Ollama availability and model utilities
 
 def ollama_is_available() -> bool:
     try:
@@ -110,6 +118,8 @@ def ensure_model(model_name: str = DEFAULT_VISION_MODEL, *, auto_pull: bool = Tr
     )
 
 
+# Image validation and preprocessing
+
 def validate_image_path(image_path: str | Path) -> Path:
     path = Path(image_path)
 
@@ -153,68 +163,7 @@ def prepare_image_for_ollama(
     return prepared_path
 
 
-def describe_image_with_ollama(
-    image_path: str | Path,
-    model_name: str = DEFAULT_VISION_MODEL,
-    *,
-    max_size: int = 768,
-    quality: int = 80,
-    timeout: int = 240,
-    auto_pull_model: bool = True,
-) -> ImageDescriptionResult:
-    ensure_model(model_name, auto_pull=auto_pull_model)
-
-    original_path = validate_image_path(image_path)
-    prepared_path = prepare_image_for_ollama(
-        original_path,
-        max_size=max_size,
-        quality=quality,
-    )
-
-    prompt = (
-        "You are analyzing a satellite image.\n\n"
-        "Describe only what is visibly present in the image in 4 to 6 concise sentences.\n"
-        "Focus on land cover, vegetation, water, roads, buildings, bare soil, "
-        "burned areas, flooding, erosion, deforestation, smoke, pollution, "
-        "or other visible environmental features.\n"
-        "Do not guess hidden causes.\n"
-        "Do not perform environmental risk assessment.\n"
-        "Do not mention uncertainty unless the image is genuinely unclear."
-    )
-
-    started = time.perf_counter()
-
-    response = _request(
-        "POST",
-        "/api/chat",
-        json={
-            "model": model_name,
-            "stream": False,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": prompt,
-                    "images": [_encode_image_base64(prepared_path)],
-                }
-            ],
-        },
-        timeout=timeout,
-    )
-
-    elapsed = time.perf_counter() - started
-    content = response.get("message", {}).get("content", "").strip()
-
-    if not content:
-        raise RuntimeError(DEFAULT_TIMEOUT_MESSAGE)
-
-    return {
-        "description": content,
-        "model_name": model_name,
-        "original_image_path": str(original_path),
-        "prepared_image_path": str(prepared_path),
-        "elapsed_seconds": round(elapsed, 2),
-    }
-
+# JSON extraction / repair helpers
 
 def _extract_first_json_object(text: str) -> str:
     start = text.find("{")
@@ -249,89 +198,345 @@ def _extract_first_json_object(text: str) -> str:
 
 
 def _repair_common_json_escapes(text: str) -> str:
-    # Fix invalid backslashes that are not valid JSON escapes.
     return re.sub(r'\\(?!["\\/bfnrtu])', r"\\\\", text)
 
 
-def _coerce_risk_item(data: dict | None) -> dict:
-    data = data if isinstance(data, dict) else {}
-    level = data.get("level", 0)
-    reason = data.get("reason", "")
+# Helper functions for evidence states and scoring
 
-    try:
-        level = float(level)
-    except (TypeError, ValueError):
-        level = 0.0
-
-    return {
-        "level": level,
-        "reason": str(reason).strip(),
-    }
-
-
-def _fallback_reason(key: str, level: float) -> str:
-    low_reasons = {
-        "deforestation_risk": "No clear signs of deforestation are visible in the image.",
-        "degradation_risk": "No clear signs of land degradation or erosion are visible in the image.",
-        "fire_risk": "No clear signs of wildfire, burn scars, or smoke are visible in the image.",
-        "flood_risk": "No clear signs of flooding or unusual water spread are visible in the image.",
-        "fragmentation_risk": "No clear signs of habitat fragmentation or disruptive land-use change are visible in the image.",
-    }
-    elevated_reasons = {
-        "deforestation_risk": "The image suggests possible vegetation loss or forest disturbance.",
-        "degradation_risk": "The image suggests possible land degradation, bare soil exposure, or erosion.",
-        "fire_risk": "The image suggests possible burn scars, smoke, or wildfire impact.",
-        "flood_risk": "The image suggests possible flooding, water spread, or sediment-heavy water.",
-        "fragmentation_risk": "The image suggests possible habitat fragmentation, urban sprawl, or ecosystem disturbance.",
-    }
-    return elevated_reasons.get(key, "") if level > 0 else low_reasons.get(key, "")
-
-
-def _normalize_visual_label(level: float, label: str | None) -> str:
-    cleaned = str(label or "").strip().upper()
-    if cleaned in {"LOW", "MODERATE", "HIGH"}:
+def _coerce_evidence_state(value: str | None) -> str:
+    cleaned = str(value or "").strip().lower()
+    if cleaned in {"none", "unclear", "present"}:
         return cleaned
-    if level >= 1.4:
+    return "unclear"
+
+
+def _evidence_state_to_score(state: str) -> float:
+    mapping = {
+        "none": 0.0,
+        "unclear": 0.5,
+        "present": 1.0,
+    }
+    return mapping.get(state, 0.5)
+
+
+def _safe_reason(value: object, fallback: str) -> str:
+    text = str(value or "").strip()
+    return text if text else fallback
+
+
+def _label_from_score(score: float) -> str:
+    if score >= 1.35:
         return "HIGH"
-    if level >= 0.75:
+    if score >= 0.65:
         return "MODERATE"
     return "LOW"
 
 
-def _normalize_structured_risk_response(data: dict) -> dict:
-    normalized = {}
-    for key in [
-        "deforestation_risk",
-        "degradation_risk",
-        "fire_risk",
-        "flood_risk",
-        "fragmentation_risk",
-    ]:
-        item = _coerce_risk_item(data.get(key))
-        if not item["reason"]:
-            item["reason"] = _fallback_reason(key, item["level"])
-        normalized[key] = item
+# Structured normalization for the image description
 
-    overall_raw = data.get("overall_visual_risk")
-    if not isinstance(overall_raw, dict):
-        component_levels = [item["level"] for item in normalized.values()]
-        inferred_level = round(sum(component_levels) / len(component_levels), 2) if component_levels else 0.0
-        overall_raw = {
-            "level": inferred_level,
-            "label": _normalize_visual_label(inferred_level, None),
-            "reason": "Overall visual risk was inferred from the individual dimension scores.",
-        }
+def _normalize_structured_description(data: dict) -> dict:
+    return {
+        "dominant_land_cover": str(data.get("dominant_land_cover", "")).strip(),
+        "vegetation_density": str(data.get("vegetation_density", "unknown")).strip().lower(),
+        "vegetation_pattern": str(data.get("vegetation_pattern", "unknown")).strip().lower(),
+        "bare_soil_visibility": str(data.get("bare_soil_visibility", "unknown")).strip().lower(),
+        "water_presence": str(data.get("water_presence", "unknown")).strip().lower(),
+        "water_appearance": str(data.get("water_appearance", "unknown")).strip().lower(),
+        "fragmentation_visibility": str(data.get("fragmentation_visibility", "unknown")).strip().lower(),
+        "human_disturbance": str(data.get("human_disturbance", "unknown")).strip().lower(),
+        "fire_or_smoke_visibility": str(data.get("fire_or_smoke_visibility", "unknown")).strip().lower(),
+        "summary": str(data.get("summary", "")).strip(),
+    }
 
-    overall = _coerce_risk_item(overall_raw)
-    overall["label"] = _normalize_visual_label(overall["level"], overall_raw.get("label"))
-    overall["reason"] = str(overall_raw.get("reason", overall["reason"])).strip()
-    normalized["overall_visual_risk"] = overall
 
-    return normalized
+# Python-side deterministic scoring
+# The model no longer invents the final score directly
 
+def _compute_visual_score(visual_evidence: dict) -> float:
+    weights = {
+        "vegetation_loss": 0.24,
+        "land_degradation": 0.22,
+        "water_anomaly": 0.16,
+        "fire_signs": 0.16,
+        "fragmentation": 0.22,
+    }
+
+    total = 0.0
+    for key, weight in weights.items():
+        state = _coerce_evidence_state(
+            visual_evidence.get(key, {}).get("state")
+            if isinstance(visual_evidence.get(key), dict)
+            else None
+        )
+        total += _evidence_state_to_score(state) * weight
+
+    return round(total * 2.0, 2)
+
+
+def _compute_context_score(context_evidence: dict) -> float:
+    weights = {
+        "forest_change_pressure": 0.4,
+        "land_degradation_pressure": 0.3,
+        "protection_gap": 0.3,
+    }
+
+    total = 0.0
+    for key, weight in weights.items():
+        state = _coerce_evidence_state(
+            context_evidence.get(key, {}).get("state")
+            if isinstance(context_evidence.get(key), dict)
+            else None
+        )
+        total += _evidence_state_to_score(state) * weight
+
+    return round(total * 2.0, 2)
+
+
+# Normalize the structured environmental assessment
+
+def _normalize_environmental_assessment(data: dict) -> dict:
+    visual_raw = data.get("visual_evidence", {}) if isinstance(data.get("visual_evidence"), dict) else {}
+    context_raw = data.get("context_evidence", {}) if isinstance(data.get("context_evidence"), dict) else {}
+
+    visual_evidence = {
+        "vegetation_loss": {
+            "state": _coerce_evidence_state(
+                visual_raw.get("vegetation_loss", {}).get("state")
+                if isinstance(visual_raw.get("vegetation_loss"), dict)
+                else None
+            ),
+            "reason": _safe_reason(
+                visual_raw.get("vegetation_loss", {}).get("reason")
+                if isinstance(visual_raw.get("vegetation_loss"), dict)
+                else None,
+                "No clear information about vegetation loss was provided.",
+            ),
+        },
+        "land_degradation": {
+            "state": _coerce_evidence_state(
+                visual_raw.get("land_degradation", {}).get("state")
+                if isinstance(visual_raw.get("land_degradation"), dict)
+                else None
+            ),
+            "reason": _safe_reason(
+                visual_raw.get("land_degradation", {}).get("reason")
+                if isinstance(visual_raw.get("land_degradation"), dict)
+                else None,
+                "No clear information about land degradation was provided.",
+            ),
+        },
+        "water_anomaly": {
+            "state": _coerce_evidence_state(
+                visual_raw.get("water_anomaly", {}).get("state")
+                if isinstance(visual_raw.get("water_anomaly"), dict)
+                else None
+            ),
+            "reason": _safe_reason(
+                visual_raw.get("water_anomaly", {}).get("reason")
+                if isinstance(visual_raw.get("water_anomaly"), dict)
+                else None,
+                "No clear information about unusual water conditions was provided.",
+            ),
+        },
+        "fire_signs": {
+            "state": _coerce_evidence_state(
+                visual_raw.get("fire_signs", {}).get("state")
+                if isinstance(visual_raw.get("fire_signs"), dict)
+                else None
+            ),
+            "reason": _safe_reason(
+                visual_raw.get("fire_signs", {}).get("reason")
+                if isinstance(visual_raw.get("fire_signs"), dict)
+                else None,
+                "No clear information about fire-related signs was provided.",
+            ),
+        },
+        "fragmentation": {
+            "state": _coerce_evidence_state(
+                visual_raw.get("fragmentation", {}).get("state")
+                if isinstance(visual_raw.get("fragmentation"), dict)
+                else None
+            ),
+            "reason": _safe_reason(
+                visual_raw.get("fragmentation", {}).get("reason")
+                if isinstance(visual_raw.get("fragmentation"), dict)
+                else None,
+                "No clear information about fragmentation or disturbance was provided.",
+            ),
+        },
+    }
+
+    context_evidence = {
+        "forest_change_pressure": {
+            "state": _coerce_evidence_state(
+                context_raw.get("forest_change_pressure", {}).get("state")
+                if isinstance(context_raw.get("forest_change_pressure"), dict)
+                else None
+            ),
+            "reason": _safe_reason(
+                context_raw.get("forest_change_pressure", {}).get("reason")
+                if isinstance(context_raw.get("forest_change_pressure"), dict)
+                else None,
+                "No clear country-level forest change pressure was provided.",
+            ),
+        },
+        "land_degradation_pressure": {
+            "state": _coerce_evidence_state(
+                context_raw.get("land_degradation_pressure", {}).get("state")
+                if isinstance(context_raw.get("land_degradation_pressure"), dict)
+                else None
+            ),
+            "reason": _safe_reason(
+                context_raw.get("land_degradation_pressure", {}).get("reason")
+                if isinstance(context_raw.get("land_degradation_pressure"), dict)
+                else None,
+                "No clear country-level land degradation pressure was provided.",
+            ),
+        },
+        "protection_gap": {
+            "state": _coerce_evidence_state(
+                context_raw.get("protection_gap", {}).get("state")
+                if isinstance(context_raw.get("protection_gap"), dict)
+                else None
+            ),
+            "reason": _safe_reason(
+                context_raw.get("protection_gap", {}).get("reason")
+                if isinstance(context_raw.get("protection_gap"), dict)
+                else None,
+                "No clear country-level protection gap was provided.",
+            ),
+        },
+    }
+
+    visual_score = _compute_visual_score(visual_evidence)
+    context_score = _compute_context_score(context_evidence)
+    overall_score = round((0.75 * visual_score) + (0.25 * context_score), 2)
+
+    return {
+        "visual_evidence": visual_evidence,
+        "context_evidence": context_evidence,
+        "visual_score": visual_score,
+        "context_score": context_score,
+        "overall_risk": {
+            "level": overall_score,
+            "label": _label_from_score(overall_score),
+            "reason": str(data.get("overall_reason", "")).strip()
+            or "Overall risk was computed in Python from structured visual and context evidence.",
+        },
+    }
+
+
+# Structured image description with Ollama
+# We now standardize the image output as JSON instead of free text.
+
+def describe_image_with_ollama(
+    image_path: str | Path,
+    model_name: str = DEFAULT_VISION_MODEL,
+    *,
+    max_size: int = 768,
+    quality: int = 80,
+    timeout: int = 240,
+    auto_pull_model: bool = True,
+) -> ImageDescriptionResult:
+    ensure_model(model_name, auto_pull=auto_pull_model)
+
+    original_path = validate_image_path(image_path)
+    prepared_path = prepare_image_for_ollama(
+        original_path,
+        max_size=max_size,
+        quality=quality,
+    )
+
+    prompt = (
+        "You are analyzing a satellite image.\n\n"
+        "Return ONLY valid JSON.\n"
+        "Do not use markdown.\n"
+        "Do not include code fences.\n"
+        "Do not guess hidden causes.\n"
+        "Do not perform environmental risk assessment.\n"
+        "Describe only what is visibly present.\n\n"
+        "Look for both obvious and subtle visual features, including:\n"
+        "- dominant land cover\n"
+        "- vegetation density and vegetation pattern\n"
+        "- patchiness or vegetation interruption\n"
+        "- bare soil exposure\n"
+        "- water presence and water appearance\n"
+        "- visible roads, buildings, linear clearings, or other human disturbance\n"
+        "- signs of fragmentation or land-cover transitions\n"
+        "- visible burn scars, smoke, or ash if present\n\n"
+        "Use conservative wording.\n"
+        "If something is not clearly visible, say 'unknown' instead of guessing.\n\n"
+        "Return exactly this JSON schema:\n"
+        "{\n"
+        '  "dominant_land_cover": "",\n'
+        '  "vegetation_density": "low|medium|high|unknown",\n'
+        '  "vegetation_pattern": "continuous|patchy|fragmented|unknown",\n'
+        '  "bare_soil_visibility": "none|low|medium|high|unknown",\n'
+        '  "water_presence": "none|small|moderate|large|unknown",\n'
+        '  "water_appearance": "clear|sediment_heavy|dark|unknown",\n'
+        '  "fragmentation_visibility": "none|low|medium|high|unknown",\n'
+        '  "human_disturbance": "none|low|medium|high|unknown",\n'
+        '  "fire_or_smoke_visibility": "none|possible|clear|unknown",\n'
+        '  "summary": ""\n'
+        "}"
+    )
+
+    started = time.perf_counter()
+
+    response = _request(
+        "POST",
+        "/api/chat",
+        json={
+            "model": model_name,
+            "stream": False,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt,
+                    "images": [_encode_image_base64(prepared_path)],
+                }
+            ],
+            "options": {"temperature": 0},
+        },
+        timeout=timeout,
+    )
+
+    elapsed = time.perf_counter() - started
+    content = response.get("message", {}).get("content", "").strip()
+
+    if not content:
+        raise RuntimeError(DEFAULT_TIMEOUT_MESSAGE)
+
+    try:
+        parsed = _normalize_structured_description(json.loads(content))
+    except json.JSONDecodeError:
+        extracted = _extract_first_json_object(content)
+        try:
+            parsed = _normalize_structured_description(json.loads(extracted))
+        except json.JSONDecodeError:
+            repaired = _repair_common_json_escapes(extracted)
+            try:
+                parsed = _normalize_structured_description(json.loads(repaired))
+            except json.JSONDecodeError as exc:
+                raise RuntimeError(
+                    f"Ollama returned malformed JSON for image description: {exc}"
+                ) from exc
+
+    return {
+        "description": parsed,
+        "model_name": model_name,
+        "original_image_path": str(original_path),
+        "prepared_image_path": str(prepared_path),
+        "elapsed_seconds": round(elapsed, 2),
+    }
+
+
+# Structured risk assessment with split task groups
+# The model only classifies evidence
+# Final scores are computed in Python afterwards
 
 def assess_environmental_risk_structured(
-    image_description: str,
+    image_description: str | dict,
     dataset_context: str,
     model_name: str = DEFAULT_VISION_MODEL,
     *,
@@ -340,44 +545,67 @@ def assess_environmental_risk_structured(
 ) -> dict:
     ensure_model(model_name, auto_pull=auto_pull_model)
 
+    if isinstance(image_description, dict):
+        image_description_text = json.dumps(image_description, ensure_ascii=False)
+    else:
+        image_description_text = str(image_description)
+
     prompt = f"""
 You are an environmental risk analyst.
 
 You will receive:
-1.⁠ ⁠A satellite-image description.
-2.⁠ ⁠Country-level environmental indicator context.
+1. A structured satellite-image description.
+2. Country-level environmental indicator context.
 
-Assess environmental danger behind the scenes using these hidden questions:
-•⁠  ⁠Does the description suggest recent deforestation or strong vegetation loss?
-•⁠  ⁠Does it suggest land degradation, erosion, bare soil exposure, or stressed land cover?
-•⁠  ⁠Does it suggest flooding, unusual water spread, or sediment-heavy water?
-•⁠  ⁠Does it suggest wildfire, burn scars, or smoke?
-•⁠  ⁠Does it suggest habitat fragmentation, urban sprawl, mining, or ecosystem disturbance?
-•⁠  ⁠Does the country-level context indicate that forest change, degradation, or weak protection may increase concern?
+Your task has two separate groups:
+1. Visual evidence from the image description
+2. Country-level context evidence from the dataset
 
-Important:
-•⁠  ⁠Image evidence is local.
-•⁠  ⁠Dataset context is national and historical.
-•⁠  ⁠Do not treat national context as exact proof for the local site.
-•⁠  ⁠Be cautious and factual.
-•⁠  ⁠Return ONLY JSON.
-•⁠  ⁠Do not use markdown.
-•⁠  ⁠Do not include code fences.
-•⁠  ⁠Do not include backslashes unless required by valid JSON escaping.
+Important rules:
+- Keep visual evidence and context evidence separate.
+- Image evidence is local.
+- Dataset context is national and historical.
+- Do not treat country-level context as exact proof for the local site.
+- Do not invent a final score.
+- Only classify evidence states and explain them briefly.
+- Use conservative reasoning.
+- If the evidence is absent, use "none".
+- If the evidence is ambiguous or incomplete, use "unclear".
+- If the evidence is supported by the description or context, use "present".
 
-Return ONLY valid JSON with exactly this schema:
+For visual evidence, consider not only extreme disaster signs but also moderate environmental stress such as:
+- patchy or interrupted vegetation
+- exposed soil
+- fragmented land cover
+- unusual land transitions
+- human disturbance
+- sediment-heavy or unusual water appearance
+- linear clearings, roads, sprawl, or other ecosystem pressure
+
+Return ONLY valid JSON.
+Do not use markdown.
+Do not include code fences.
+
+Return exactly this schema:
 
 {{
-  "deforestation_risk": {{"level": 0, "reason": ""}},
-  "degradation_risk": {{"level": 0, "reason": ""}},
-  "fire_risk": {{"level": 0, "reason": ""}},
-  "flood_risk": {{"level": 0, "reason": ""}},
-  "fragmentation_risk": {{"level": 0, "reason": ""}},
-  "overall_visual_risk": {{"level": 0, "label": "LOW", "reason": ""}}
+  "visual_evidence": {{
+    "vegetation_loss": {{"state": "none", "reason": ""}},
+    "land_degradation": {{"state": "none", "reason": ""}},
+    "water_anomaly": {{"state": "none", "reason": ""}},
+    "fire_signs": {{"state": "none", "reason": ""}},
+    "fragmentation": {{"state": "none", "reason": ""}}
+  }},
+  "context_evidence": {{
+    "forest_change_pressure": {{"state": "none", "reason": ""}},
+    "land_degradation_pressure": {{"state": "none", "reason": ""}},
+    "protection_gap": {{"state": "none", "reason": ""}}
+  }},
+  "overall_reason": ""
 }}
 
-Image description:
-{image_description}
+Structured image description:
+{image_description_text}
 
 Dataset context:
 {dataset_context}
@@ -390,6 +618,7 @@ Dataset context:
             "model": model_name,
             "stream": False,
             "messages": [{"role": "user", "content": prompt}],
+            "options": {"temperature": 0},
         },
         timeout=timeout,
     )
@@ -399,19 +628,18 @@ Dataset context:
         raise RuntimeError(DEFAULT_TIMEOUT_MESSAGE)
 
     try:
-        return _normalize_structured_risk_response(json.loads(content))
+        parsed = json.loads(content)
     except json.JSONDecodeError:
-        pass
-
-    extracted = _extract_first_json_object(content)
-
-    try:
-        return _normalize_structured_risk_response(json.loads(extracted))
-    except json.JSONDecodeError:
-        repaired = _repair_common_json_escapes(extracted)
+        extracted = _extract_first_json_object(content)
         try:
-            return _normalize_structured_risk_response(json.loads(repaired))
-        except json.JSONDecodeError as exc:
-            raise RuntimeError(
-                f"Ollama returned malformed JSON for risk assessment: {exc}"
-            ) from exc
+            parsed = json.loads(extracted)
+        except json.JSONDecodeError:
+            repaired = _repair_common_json_escapes(extracted)
+            try:
+                parsed = json.loads(repaired)
+            except json.JSONDecodeError as exc:
+                raise RuntimeError(
+                    f"Ollama returned malformed JSON for risk assessment: {exc}"
+                ) from exc
+
+    return _normalize_environmental_assessment(parsed)
