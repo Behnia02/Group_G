@@ -20,6 +20,9 @@ from ollama_utils import (
 )
 from tile_utils import download_satellite_image
 
+from config_loader import get_image_model_config, get_risk_thresholds, get_text_model_config
+from db_utils import append_run, check_cache
+
 try:
     from country_state_city import City, Country, State
 except ImportError:
@@ -174,7 +177,38 @@ def render_ai_workflow(data) -> None:
             unsafe_allow_html=True,
         )
 
-        if st.button("Assess environmental risk", use_container_width=True):
+        cached = check_cache(
+            lat=float(st.session_state.ai_settings["latitude"]),
+            lon=float(st.session_state.ai_settings["longitude"]),
+            zoom=int(st.session_state.ai_settings["zoom"]),
+        )
+
+        if cached is not None:
+            st.info("✅ Found cached result for these coordinates. Showing saved analysis.")
+            st.session_state.risk_result = {
+                "overall_risk": {
+                    "score": float(cached.get("final_risk_score", 0.0)),
+                    "label": str(cached["danger"]),
+                    "reason": str(cached["text_description"]),
+                },
+                "overall_visual_risk": {"level": float(cached.get("visual_risk_score", 0.0)), "label": str(cached["danger"]), "reason": ""},
+                "dataset_context_risk": {"level": float(cached.get("dataset_risk_score", 0.0)), "reason": "Loaded from cache."},
+                "deforestation_risk": {"level": float(cached.get("deforestation_risk", 0.0)), "reason": str(cached.get("deforestation_reason", ""))},
+                "degradation_risk": {"level": float(cached.get("degradation_risk", 0.0)), "reason": str(cached.get("degradation_reason", ""))},
+                "fire_risk": {"level": float(cached.get("fire_risk", 0.0)), "reason": str(cached.get("fire_reason", ""))},
+                "flood_risk": {"level": float(cached.get("flood_risk", 0.0)), "reason": str(cached.get("flood_reason", ""))},
+                "fragmentation_risk": {"level": float(cached.get("fragmentation_risk", 0.0)), "reason": str(cached.get("fragmentation_reason", ""))},
+                }
+            try:
+                _, snapshots = build_dataset_context(
+                    data,
+                    st.session_state.ai_settings["country"],
+                )
+                st.session_state.risk_snapshots = snapshots
+            except Exception:
+                st.session_state.risk_snapshots = []
+            st.session_state.risk_context_text = ""
+        elif st.button("Assess environmental risk", use_container_width=True):
             status_box = st.empty()
             try:
                 status_box.info("Building dataset context...")
@@ -195,6 +229,34 @@ def render_ai_workflow(data) -> None:
                 combined = combine_risk_scores(model_result, dataset_score, dataset_reason)
 
                 st.session_state.risk_result = combined
+                img_cfg = get_image_model_config()
+                txt_cfg = get_text_model_config()
+                append_run(
+                    lat=float(st.session_state.ai_settings["latitude"]),
+                    lon=float(st.session_state.ai_settings["longitude"]),
+                    zoom=int(st.session_state.ai_settings["zoom"]),
+                    image_path=str(st.session_state.satellite_image_path),
+                    image_description=str(result["description"]),
+                    image_prompt=str(img_cfg.get("prompt", "")),
+                    image_model=str(st.session_state.selected_vision_model),
+                    text_description=str(combined["overall_risk"]["reason"]),
+                    text_prompt=str(txt_cfg.get("prompt", "")),
+                    text_model=str(st.session_state.selected_vision_model),
+                    visual_risk_score=float(combined["overall_visual_risk"]["level"]),
+                    dataset_risk_score=float(dataset_score),
+                    final_risk_score=float(combined["overall_risk"]["score"]),
+                    deforestation_risk=float(combined["deforestation_risk"]["level"]),
+                    deforestation_reason=str(combined["deforestation_risk"]["reason"]),
+                    degradation_risk=float(combined["degradation_risk"]["level"]),
+                    degradation_reason=str(combined["degradation_risk"]["reason"]),
+                    fire_risk=float(combined["fire_risk"]["level"]),
+                    fire_reason=str(combined["fire_risk"]["reason"]),
+                    flood_risk=float(combined["flood_risk"]["level"]),
+                    flood_reason=str(combined["flood_risk"]["reason"]),
+                    fragmentation_risk=float(combined["fragmentation_risk"]["level"]),
+                    fragmentation_reason=str(combined["fragmentation_risk"]["reason"]),
+                    danger=str(combined["overall_risk"]["label"]),
+                )
                 st.session_state.risk_snapshots = snapshots
                 st.session_state.risk_context_text = dataset_context
                 st.session_state.satellite_analysis_error = None
@@ -894,12 +956,13 @@ def compute_dataset_risk_score(snapshots: list[dict]) -> tuple[float, str]:
 
 
 def combine_risk_scores(model_result: dict, dataset_score: float, dataset_reason: str) -> dict:
+    thresholds = get_risk_thresholds()
     visual_score = float(model_result["overall_visual_risk"]["level"])
     final_score = round(0.6 * visual_score + 0.4 * dataset_score, 2)
 
-    if final_score >= 1.4:
+    if final_score >= thresholds["high"]:
         final_label = "HIGH"
-    elif final_score >= 0.75:
+    elif final_score >= thresholds["moderate"]:
         final_label = "MODERATE"
     else:
         final_label = "LOW"
