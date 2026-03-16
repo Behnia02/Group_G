@@ -62,3 +62,170 @@ You will receive: 1. A satellite-image description. 2. Country-level environment
 Assess environmental danger behind the scenes using these hidden questions: - Does the description suggest recent deforestation or strong vegetation loss? - Does it suggest land degradation, erosion, bare soil exposure, or stressed land cover? - Does it suggest flooding, unusual water spread, or sediment-heavy water? - Does it suggest wildfire, burn scars, or smoke? - Does it suggest habitat fragmentation, urban sprawl, mining, or ecosystem disturbance? - Does the country-level context indicate that forest change, degradation, or weak protection may increase concern?
 Important: - Image evidence is local. - Dataset context is national and historical. - Do not treat national context as exact proof for the local site. - Be cautious and factual. - Return ONLY JSON, no markdown, no code fences.
 ",llava:7b,0.0,0.7,0.28,0.0,No clear signs of deforestation are visible in the image.,0.0,No clear signs of land degradation or erosion are visible in the image.,0.0,"No clear signs of wildfire, burn scars, or smoke are visible in the image.",0.0,No clear signs of flooding or unusual water spread are visible in the image.,0.0,No clear signs of habitat fragmentation or disruptive land-use change are visible in the image.,LOW
+2026-03-15T21:37:58,15.0,47.5213,10,images\satellite_15.0_47.5213_z10.png,"The image is a satellite view of a large, rugged landscape featuring mountainous terrain. There are visible erosion channels and a complex network of rivers and valleys, indicating a rugged and geologically diverse area. There are no roads, buildings, or significant vegetation cover, and the landscape is predominantly composed of rocky surfaces and barren soil, with some areas showing signs of vegetation regrowth. There are no indications of pollution, deforestation, smoke, or flooding. The terrain appears to be arid, with a mix of rocky outcrops and relatively flat areas. The overall impression is of a remote and natural environment, likely within a desert or semi-arid region.","You are analyzing a satellite image.
+Describe only what is visibly present in the image in 4 to 6 concise sentences. Focus on land cover, vegetation, water, roads, buildings, bare soil, burned areas, flooding, erosion, deforestation, smoke, pollution, or other visible environmental features. Do not guess hidden causes. Do not perform environmental risk assessment. Do not mention uncertainty unless the image is genuinely unclear.
+",llava:7b,"Visual evidence was assessed as LOW. Dataset context score was 0.42. The overall impression is of a remote and natural environment, with no visible environmental dangers in the image. Land degraded suggests elevated concern. Land protected suggests elevated concern.","You are an environmental risk analyst.
+You will receive: 1. A satellite-image description. 2. Country-level environmental indicator context.
+Assess environmental danger behind the scenes using these hidden questions: - Does the description suggest recent deforestation or strong vegetation loss? - Does it suggest land degradation, erosion, bare soil exposure, or stressed land cover? - Does it suggest flooding, unusual water spread, or sediment-heavy water? - Does it suggest wildfire, burn scars, or smoke? - Does it suggest habitat fragmentation, urban sprawl, mining, or ecosystem disturbance? - Does the country-level context indicate that forest change, degradation, or weak protection may increase concern?
+Important: - Image evidence is local. - Dataset context is national and historical. - Do not treat national context as exact proof for the local site. - Be cautious and factual. - Return ONLY JSON, no markdown, no code fences.
+",llava:7b,0.0,0.42,0.17,0.0,The image shows no deforestation or significant vegetation cover.,0.0,"The landscape is predominantly composed of rocky surfaces and barren soil, with some areas showing signs of vegetation regrowth.",0.0,"The terrain appears to be arid, with no indications of burn scars or smoke.",0.0,The image shows no signs of flooding or unusual water spread.,0.0,The image shows no habitat fragmentation or urban sprawl.,LOW
+2026-03-16T11:30:06,-11.6,-61.9,9,images\satellite_-11.6_-61.9_z9.png,"{'dominant_land_cover': 'low', 'vegetation_density': 'low', 'vegetation_pattern': 'continuous', 'bare_soil_visibility': 'none', 'water_presence': 'none', 'water_appearance': 'unknown', 'fragmentation_visibility': 'none', 'human_disturbance': 'none', 'fire_or_smoke_visibility': 'none', 'summary': 'The image shows a landscape with low vegetation density and a continuous vegetation pattern. There is no visible bare soil, water, or human disturbance. The image does not provide enough information to determine the presence of fire or smoke.'}","You are analyzing a satellite image.
+Answer the following hidden questions based only on what is visibly present in the image: - What is the dominant land cover? - Is vegetation dense, medium, sparse, patchy, continuous, or fragmented? - Is bare soil visible? If yes, how much? - Is water visible? If yes, how much and what does it look like? - Are roads, buildings, linear clearings, or other human disturbances visible? - Are there visible signs of fragmentation or abrupt land-cover transitions? - Are there visible signs of fire, smoke, or burn scars?
+Important rules: - Do not guess hidden causes. - Do not perform environmental risk assessment. - Describe only what is visible. - If something is not clearly visible, use ""unknown"". - Be conservative and factual.
+Return ONLY valid JSON. Do not use markdown. Do not include code fences.
+Return exactly this JSON schema: {
+  ""dominant_land_cover"": """",
+  ""vegetation_density"": ""low|medium|high|unknown"",
+  ""vegetation_pattern"": ""continuous|patchy|fragmented|unknown"",
+  ""bare_soil_visibility"": ""none|low|medium|high|unknown"",
+  ""water_presence"": ""none|small|moderate|large|unknown"",
+  ""water_appearance"": ""clear|sediment_heavy|dark|unknown"",
+  ""fragmentation_visibility"": ""none|low|medium|high|unknown"",
+  ""human_disturbance"": ""none|low|medium|high|unknown"",
+  ""fire_or_smoke_visibility"": ""none|possible|clear|unknown"",
+  ""summary"": """"
+}
+",llava:7b,Visual evidence was assessed as LOW. Dataset context score was 0.60. The image and dataset context do not provide enough information to determine the presence of environmental danger behind the scenes. Annual deforestation suggests elevated concern. Forest area change suggests elevated concern.,"You are an environmental risk analyst.
+You will receive: 1. A structured satellite-image description. 2. Country-level environmental indicator context.
+Your task has two separate groups: 1. Visual evidence from the image description 2. Country-level context evidence from the dataset
+Assess environmental danger behind the scenes using these hidden questions.
+Questions for visual evidence: - Does the image description suggest vegetation loss, sparse cover, or stressed vegetation? - Does it suggest land degradation, erosion, exposed soil, or disturbed ground? - Does it suggest flooding, unusual water spread, sediment-heavy water, or abnormal water appearance? - Does it suggest fire, smoke, burn scars, or thermal disturbance? - Does it suggest fragmentation, human disturbance, linear clearings, roads, urban sprawl, mining, or abrupt land-cover transitions?
+Questions for country-level context evidence: - Does the country-level context suggest meaningful forest change pressure? - Does it suggest meaningful land degradation pressure? - Does it suggest weak protection, ecosystem pressure, or a protection gap?
+Important rules: - Keep visual evidence and context evidence separate. - Image evidence is local. - Dataset context is national and historical. - Do not treat country-level context as exact proof for the local site. - Do not invent a final score. - Only classify evidence states and explain them briefly. - Use conservative reasoning. - If the evidence is absent, use ""none"". - If the evidence is ambiguous, partial, or incomplete, use ""unclear"". - If the evidence is supported by the description or context, use ""present"". - Consider not only extreme disaster signs but also moderate environmental stress.
+Return ONLY valid JSON. Do not use markdown. Do not include code fences.
+Return exactly this schema: {
+  ""visual_evidence"": {
+    ""vegetation_loss"": {""state"": ""none"", ""reason"": """"},
+    ""land_degradation"": {""state"": ""none"", ""reason"": """"},
+    ""water_anomaly"": {""state"": ""none"", ""reason"": """"},
+    ""fire_signs"": {""state"": ""none"", ""reason"": """"},
+    ""fragmentation"": {""state"": ""none"", ""reason"": """"}
+  },
+  ""context_evidence"": {
+    ""forest_change_pressure"": {""state"": ""none"", ""reason"": """"},
+    ""land_degradation_pressure"": {""state"": ""none"", ""reason"": """"},
+    ""protection_gap"": {""state"": ""none"", ""reason"": """"}
+  },
+  ""overall_reason"": """"
+}
+",llava:7b,0.0,0.6,0.24,0.0,"The image shows a landscape with low vegetation density and a continuous vegetation pattern. There is no visible bare soil, water, or human disturbance. The image does not provide enough information to determine the presence of fire or smoke.",0.0,The image does not provide enough information to determine the presence of land degradation.,0.0,The image does not provide enough information to determine the presence of fire or smoke.,0.0,The image does not provide enough information to determine the presence of water anomaly.,0.0,The image does not provide enough information to determine the presence of fragmentation.,LOW
+2026-03-16T11:45:10,45.1,59.1,8,images\satellite_45.1_59.1_z8.png,"{'dominant_land_cover': 'unknown', 'vegetation_density': 'unknown', 'vegetation_pattern': 'unknown', 'bare_soil_visibility': 'unknown', 'water_presence': 'none', 'water_appearance': 'unknown', 'fragmentation_visibility': 'unknown', 'human_disturbance': 'unknown', 'fire_or_smoke_visibility': 'unknown', 'summary': 'The image provided is a satellite image of a landscape, but the details are not clear enough to accurately describe the dominant land cover, vegetation density and pattern, bare soil visibility, water presence and appearance, fragmentation visibility, human disturbance, and fire or smoke visibility. The image is too small and lacks clarity to provide a detailed analysis.'}","You are analyzing a satellite image.
+Answer the following hidden questions based only on what is visibly present in the image: - What is the dominant land cover? - Is vegetation dense, medium, sparse, patchy, continuous, or fragmented? - Is bare soil visible? If yes, how much? - Is water visible? If yes, how much and what does it look like? - Are roads, buildings, linear clearings, or other human disturbances visible? - Are there visible signs of fragmentation or abrupt land-cover transitions? - Are there visible signs of fire, smoke, or burn scars?
+Important rules: - Do not guess hidden causes. - Do not perform environmental risk assessment. - Describe only what is visible. - If something is not clearly visible, use ""unknown"". - Be conservative and factual.
+Return ONLY valid JSON. Do not use markdown. Do not include code fences.
+Return exactly this JSON schema: {
+  ""dominant_land_cover"": """",
+  ""vegetation_density"": ""low|medium|high|unknown"",
+  ""vegetation_pattern"": ""continuous|patchy|fragmented|unknown"",
+  ""bare_soil_visibility"": ""none|low|medium|high|unknown"",
+  ""water_presence"": ""none|small|moderate|large|unknown"",
+  ""water_appearance"": ""clear|sediment_heavy|dark|unknown"",
+  ""fragmentation_visibility"": ""none|low|medium|high|unknown"",
+  ""human_disturbance"": ""none|low|medium|high|unknown"",
+  ""fire_or_smoke_visibility"": ""none|possible|clear|unknown"",
+  ""summary"": """"
+}
+",llava:7b,"Visual evidence was assessed as LOW. Dataset context score was 0.52. The image provided is too small and lacks clarity to accurately describe the environmental conditions in Uzbekistan. The dataset context does not provide information on forest change pressure, land degradation pressure, and the protection gap in Uzbekistan. Land degraded suggests elevated concern. Land protected adds moderate context risk. Mountain ecosystems adds moderate context risk.","You are an environmental risk analyst.
+You will receive: 1. A structured satellite-image description. 2. Country-level environmental indicator context.
+Your task has two separate groups: 1. Visual evidence from the image description 2. Country-level context evidence from the dataset
+Assess environmental danger behind the scenes using these hidden questions.
+Questions for visual evidence: - Does the image description suggest vegetation loss, sparse cover, or stressed vegetation? - Does it suggest land degradation, erosion, exposed soil, or disturbed ground? - Does it suggest flooding, unusual water spread, sediment-heavy water, or abnormal water appearance? - Does it suggest fire, smoke, burn scars, or thermal disturbance? - Does it suggest fragmentation, human disturbance, linear clearings, roads, urban sprawl, mining, or abrupt land-cover transitions?
+Questions for country-level context evidence: - Does the country-level context suggest meaningful forest change pressure? - Does it suggest meaningful land degradation pressure? - Does it suggest weak protection, ecosystem pressure, or a protection gap?
+Important rules: - Keep visual evidence and context evidence separate. - Image evidence is local. - Dataset context is national and historical. - Do not treat country-level context as exact proof for the local site. - Do not invent a final score. - Only classify evidence states and explain them briefly. - Use conservative reasoning. - If the evidence is absent, use ""none"". - If the evidence is ambiguous, partial, or incomplete, use ""unclear"". - If the evidence is supported by the description or context, use ""present"". - Consider not only extreme disaster signs but also moderate environmental stress.
+Return ONLY valid JSON. Do not use markdown. Do not include code fences.
+Return exactly this schema: {
+  ""visual_evidence"": {
+    ""vegetation_loss"": {""state"": ""none"", ""reason"": """"},
+    ""land_degradation"": {""state"": ""none"", ""reason"": """"},
+    ""water_anomaly"": {""state"": ""none"", ""reason"": """"},
+    ""fire_signs"": {""state"": ""none"", ""reason"": """"},
+    ""fragmentation"": {""state"": ""none"", ""reason"": """"}
+  },
+  ""context_evidence"": {
+    ""forest_change_pressure"": {""state"": ""none"", ""reason"": """"},
+    ""land_degradation_pressure"": {""state"": ""none"", ""reason"": """"},
+    ""protection_gap"": {""state"": ""none"", ""reason"": """"}
+  },
+  ""overall_reason"": """"
+}
+",llava:7b,0.0,0.52,0.21,0.0,The image provided is too small and lacks clarity to accurately describe the vegetation density and pattern.,0.0,The image provided is too small and lacks clarity to accurately describe the bare soil visibility.,0.0,The image provided is too small and lacks clarity to accurately describe the fire or smoke visibility.,0.0,The image provided is too small and lacks clarity to accurately describe the water presence and appearance.,0.0,The image provided is too small and lacks clarity to accurately describe the fragmentation visibility.,LOW
+2026-03-16T11:54:54,-16.5,-62.5,9,images\satellite_-16.5_-62.5_z9.png,"{'dominant_land_cover': 'forest', 'vegetation_density': 'medium', 'vegetation_pattern': 'continuous', 'bare_soil_visibility': 'none', 'water_presence': 'none', 'water_appearance': 'unknown', 'fragmentation_visibility': 'none', 'human_disturbance': 'none', 'fire_or_smoke_visibility': 'none', 'summary': 'The image shows a large area of forested land with a medium level of vegetation density. The vegetation pattern appears continuous, with no visible signs of fragmentation or land-cover transitions. There is no visible bare soil exposure, and no water presence or water appearance is discernible. There are no signs of human disturbance or fire or smoke. The image provides a clear view of the forested area.'}","You are analyzing a satellite image.
+Answer the following hidden questions based only on what is visibly present in the image: - What is the dominant land cover? - Is vegetation dense, medium, sparse, patchy, continuous, or fragmented? - Is bare soil visible? If yes, how much? - Is water visible? If yes, how much and what does it look like? - Are roads, buildings, linear clearings, or other human disturbances visible? - Are there visible signs of fragmentation or abrupt land-cover transitions? - Are there visible signs of fire, smoke, or burn scars?
+Important rules: - Do not guess hidden causes. - Do not perform environmental risk assessment. - Describe only what is visible. - If something is not clearly visible, use ""unknown"". - Be conservative and factual.
+Return ONLY valid JSON. Do not use markdown. Do not include code fences.
+Return exactly this JSON schema: {
+  ""dominant_land_cover"": """",
+  ""vegetation_density"": ""low|medium|high|unknown"",
+  ""vegetation_pattern"": ""continuous|patchy|fragmented|unknown"",
+  ""bare_soil_visibility"": ""none|low|medium|high|unknown"",
+  ""water_presence"": ""none|small|moderate|large|unknown"",
+  ""water_appearance"": ""clear|sediment_heavy|dark|unknown"",
+  ""fragmentation_visibility"": ""none|low|medium|high|unknown"",
+  ""human_disturbance"": ""none|low|medium|high|unknown"",
+  ""fire_or_smoke_visibility"": ""none|possible|clear|unknown"",
+  ""summary"": """"
+}
+",llava:7b,Visual evidence was assessed as LOW. Dataset context score was 0.53. The image and dataset context do not provide any evidence of environmental danger behind the scenes in Bolivia. Forest area change suggests elevated concern. Mountain ecosystems adds moderate context risk.,"You are an environmental risk analyst.
+You will receive: 1. A structured satellite-image description. 2. Country-level environmental indicator context.
+Your task has two separate groups: 1. Visual evidence from the image description 2. Country-level context evidence from the dataset
+Assess environmental danger behind the scenes using these hidden questions.
+Questions for visual evidence: - Does the image description suggest vegetation loss, sparse cover, or stressed vegetation? - Does it suggest land degradation, erosion, exposed soil, or disturbed ground? - Does it suggest flooding, unusual water spread, sediment-heavy water, or abnormal water appearance? - Does it suggest fire, smoke, burn scars, or thermal disturbance? - Does it suggest fragmentation, human disturbance, linear clearings, roads, urban sprawl, mining, or abrupt land-cover transitions?
+Questions for country-level context evidence: - Does the country-level context suggest meaningful forest change pressure? - Does it suggest meaningful land degradation pressure? - Does it suggest weak protection, ecosystem pressure, or a protection gap?
+Important rules: - Keep visual evidence and context evidence separate. - Image evidence is local. - Dataset context is national and historical. - Do not treat country-level context as exact proof for the local site. - Do not invent a final score. - Only classify evidence states and explain them briefly. - Use conservative reasoning. - If the evidence is absent, use ""none"". - If the evidence is ambiguous, partial, or incomplete, use ""unclear"". - If the evidence is supported by the description or context, use ""present"". - Consider not only extreme disaster signs but also moderate environmental stress.
+Return ONLY valid JSON. Do not use markdown. Do not include code fences.
+Return exactly this schema: {
+  ""visual_evidence"": {
+    ""vegetation_loss"": {""state"": ""none"", ""reason"": """"},
+    ""land_degradation"": {""state"": ""none"", ""reason"": """"},
+    ""water_anomaly"": {""state"": ""none"", ""reason"": """"},
+    ""fire_signs"": {""state"": ""none"", ""reason"": """"},
+    ""fragmentation"": {""state"": ""none"", ""reason"": """"}
+  },
+  ""context_evidence"": {
+    ""forest_change_pressure"": {""state"": ""none"", ""reason"": """"},
+    ""land_degradation_pressure"": {""state"": ""none"", ""reason"": """"},
+    ""protection_gap"": {""state"": ""none"", ""reason"": """"}
+  },
+  ""overall_reason"": """"
+}
+",llava:7b,0.0,0.53,0.21,0.0,The image shows a large area of forested land with a medium level of vegetation density. There are no visible signs of vegetation loss or stressed vegetation.,0.0,"The image does not show any signs of land degradation, erosion, exposed soil, or disturbed ground.",0.0,"The image does not show any signs of fire, smoke, burn scars, or thermal disturbance.",0.0,"The image does not show any signs of flooding, unusual water spread, sediment-heavy water, or abnormal water appearance.",0.0,"The image does not show any signs of fragmentation, human disturbance, linear clearings, roads, urban sprawl, mining, or abrupt land-cover transitions.",LOW
+2026-03-16T12:05:34,-17.8,-60.5,9,images\satellite_-17.8_-60.5_z9.png,"{'dominant_land_cover': 'forest', 'vegetation_density': 'medium', 'vegetation_pattern': 'continuous', 'bare_soil_visibility': 'none', 'water_presence': 'none', 'water_appearance': 'unknown', 'fragmentation_visibility': 'none', 'human_disturbance': 'none', 'fire_or_smoke_visibility': 'none', 'summary': 'The image shows a large area of forested land with a medium level of vegetation density. The vegetation pattern appears continuous, with no visible signs of fragmentation or land-cover transitions. There is no visible bare soil exposure, and no water presence or water appearance is discernible. There are no signs of human disturbance, such as roads, buildings, or linear clearings. There is no visible burn scar, smoke, or ash. The image is a satellite view, and the overall appearance is that of a natural landscape with no clear signs of human activity or environmental disturbance.'}","You are analyzing a satellite image.
+Answer the following hidden questions based only on what is visibly present in the image: - What is the dominant land cover? - Is vegetation dense, medium, sparse, patchy, continuous, or fragmented? - Is bare soil visible? If yes, how much? - Is water visible? If yes, how much and what does it look like? - Are roads, buildings, linear clearings, or other human disturbances visible? - Are there visible signs of fragmentation or abrupt land-cover transitions? - Are there visible signs of fire, smoke, or burn scars?
+Important rules: - Do not guess hidden causes. - Do not perform environmental risk assessment. - Describe only what is visible. - If something is not clearly visible, use ""unknown"". - Be conservative and factual.
+Return ONLY valid JSON. Do not use markdown. Do not include code fences.
+Return exactly this JSON schema: {
+  ""dominant_land_cover"": """",
+  ""vegetation_density"": ""low|medium|high|unknown"",
+  ""vegetation_pattern"": ""continuous|patchy|fragmented|unknown"",
+  ""bare_soil_visibility"": ""none|low|medium|high|unknown"",
+  ""water_presence"": ""none|small|moderate|large|unknown"",
+  ""water_appearance"": ""clear|sediment_heavy|dark|unknown"",
+  ""fragmentation_visibility"": ""none|low|medium|high|unknown"",
+  ""human_disturbance"": ""none|low|medium|high|unknown"",
+  ""fire_or_smoke_visibility"": ""none|possible|clear|unknown"",
+  ""summary"": """"
+}
+",llava:7b,"Visual evidence was assessed as LOW. Dataset context score was 0.53. Based on the image and dataset context, there are no clear signs of environmental danger behind the scenes in the depicted area. The image shows a large area of forested land with a medium level of vegetation density, and there are no visible signs of vegetation loss, land degradation, water anomaly, fire, or fragmentation. The dataset context does not provide information on forest change pressure, land degradation pressure, or the protection gap in Bolivia. Therefore, the overall reason for the absence of environmental danger behind the scenes is that the image and dataset context do not show any signs of environmental stress or pressure. Forest area change suggests elevated concern. Mountain ecosystems adds moderate context risk.","You are an environmental risk analyst.
+You will receive: 1. A structured satellite-image description. 2. Country-level environmental indicator context.
+Your task has two separate groups: 1. Visual evidence from the image description 2. Country-level context evidence from the dataset
+Assess environmental danger behind the scenes using these hidden questions.
+Questions for visual evidence: - Does the image description suggest vegetation loss, sparse cover, or stressed vegetation? - Does it suggest land degradation, erosion, exposed soil, or disturbed ground? - Does it suggest flooding, unusual water spread, sediment-heavy water, or abnormal water appearance? - Does it suggest fire, smoke, burn scars, or thermal disturbance? - Does it suggest fragmentation, human disturbance, linear clearings, roads, urban sprawl, mining, or abrupt land-cover transitions?
+Questions for country-level context evidence: - Does the country-level context suggest meaningful forest change pressure? - Does it suggest meaningful land degradation pressure? - Does it suggest weak protection, ecosystem pressure, or a protection gap?
+Important rules: - Keep visual evidence and context evidence separate. - Image evidence is local. - Dataset context is national and historical. - Do not treat country-level context as exact proof for the local site. - Do not invent a final score. - Only classify evidence states and explain them briefly. - Use conservative reasoning. - If the evidence is absent, use ""none"". - If the evidence is ambiguous, partial, or incomplete, use ""unclear"". - If the evidence is supported by the description or context, use ""present"". - Consider not only extreme disaster signs but also moderate environmental stress.
+Return ONLY valid JSON. Do not use markdown. Do not include code fences.
+Return exactly this schema: {
+  ""visual_evidence"": {
+    ""vegetation_loss"": {""state"": ""none"", ""reason"": """"},
+    ""land_degradation"": {""state"": ""none"", ""reason"": """"},
+    ""water_anomaly"": {""state"": ""none"", ""reason"": """"},
+    ""fire_signs"": {""state"": ""none"", ""reason"": """"},
+    ""fragmentation"": {""state"": ""none"", ""reason"": """"}
+  },
+  ""context_evidence"": {
+    ""forest_change_pressure"": {""state"": ""none"", ""reason"": """"},
+    ""land_degradation_pressure"": {""state"": ""none"", ""reason"": """"},
+    ""protection_gap"": {""state"": ""none"", ""reason"": """"}
+  },
+  ""overall_reason"": """"
+}
+",llava:7b,0.0,0.53,0.21,0.0,"The image shows a large area of forested land with a medium level of vegetation density. There are no visible signs of vegetation loss, sparse cover, or stressed vegetation.",0.0,"The image does not show any signs of land degradation, erosion, exposed soil, or disturbed ground.",0.0,"The image does not show any signs of fire, smoke, burn scars, or thermal disturbance.",0.0,"The image does not show any signs of flooding, unusual water spread, sediment-heavy water, or abnormal water appearance.",0.0,"The image does not show any signs of fragmentation, human disturbance, linear clearings, roads, urban sprawl, mining, or abrupt land-cover transitions.",LOW
