@@ -26,7 +26,7 @@ Project Okavango is a lightweight environmental data analysis tool built for the
 
 2. Install Python dependencies:
 
-        pip install -r requirements.txt
+        python -m pip install -r requirements.txt
 
 3. Pull the required Ollama model:
 
