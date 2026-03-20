@@ -44,6 +44,36 @@ The app has two pages:
 - **Environmental Explorer** — interactive world map with 5 environmental indicators
 - **AI Workflow** — satellite image download and AI environmental risk assessment
 
+## SDGs and Project Impact
+
+Project Okavango was built as a proof of concept for environmental monitoring using open data and local AI models. The tool combines satellite imagery, geospatial datasets, and large language models to identify at risk natural regions anywhere in the world.
+
+The world is facing an accelerating environmental crisis. Forests are disappearing at unprecedented rates, land is being degraded faster than it can recover, and ecosystems that took millennia to form are being destroyed within decades. Traditional monitoring approaches rely on expensive satellite infrastructure, proprietary software, and specialised expertise that many organisations and governments simply do not have access to. Project Okavango demonstrates that meaningful environmental monitoring does not have to be expensive or inaccessible by combining freely available satellite imagery, open environmental datasets, and locally-run AI models that require no internet connection or API fees.
+
+### SDG 15 — Life on Land
+This is the most direct connection. The project monitors deforestation, land degradation, ecosystem protection, and mountain biodiversity all core targets of SDG 15. By combining satellite imagery with historical environmental datasets, the tool enables rapid identification of at risk regions, supporting conservation efforts and policy decisions.
+
+### SDG 13 — Climate Action
+Deforestation and land degradation are major drivers of climate change. Forests act as carbon sinks, and their destruction releases stored carbon dioxide into the atmosphere. By flagging areas experiencing active forest loss, the tool contributes to early warning systems that can inform climate action at local and national levels.
+
+### SDG 17 — Partnerships for the Goals
+The project is built entirely on free and open data sources and open source tools, demonstrating how lightweight accessible tools can be built without proprietary software, enabling wider adoption in lower resource contexts.
+
+### SDG 11 — Sustainable Cities and Communities
+The AI Workflow allows users to analyse any location on Earth, including peri urban areas where natural land is being converted to urban use, supporting urban planners in monitoring the environmental impact of city growth on surrounding ecosystems.
+
+In summary, Project Okavango demonstrates how open data, geospatial analysis, and local AI models can be combined into a lightweight tool with real world environmental monitoring applications. With further development, this type of tool could support NGOs, government agencies, and researchers in tracking progress towards the SDGs in near real time. Three concrete examples of the app identifying environmental dangers are provided below.
+
+## How Risk Assessment Works
+
+The risk assessment combines two sources of evidence:
+
+1. **Visual risk score**: a local vision model (llava:7b) analyses the satellite image and scores 5 environmental dimensions: deforestation, degradation, fire, flood, and fragmentation. Each dimension is scored from 0 to 2 based on visible evidence in the image.
+
+2. **Dataset context score**: country level historical data from the 5 environmental datasets is used to compute a national risk score based on percentile rankings and trend direction (improving or worsening).
+
+The final score is a weighted combination: 60% visual evidence + 40% dataset context. The result is classified as LOW (below 0.75), MODERATE (0.75–1.4), or HIGH (above 1.4).
+
 ## Examples of Environmental Risk Detection
 
 ### Example 1 — Amazon Basin, Brazil (HIGH Risk)
@@ -51,9 +81,9 @@ The app has two pages:
 
 ![Amazon Basin deforestation](assets/example1_amazon.jpeg)
 
-**AI Description:** Aerial view with patches of dark green vegetation, bare soil, and visible road networks cutting through the landscape. Clear signs of forest fragmentation and land conversion.
+**AI Description:** Aerial view with patches of dark green vegetation, bare soil, and visible road networks cutting through the landscape. Clear signs of forest fragmentation and land conversion are visible across the image.
 
-**Risk Assessment:** HIGH: Annual deforestation and forest area change both suggest elevated concern. Dataset context score: 0.60.
+**Risk Assessment:** HIGH:  Visual score flagged deforestation and fragmentation. Annual deforestation and forest area change both suggest elevated concern at the national level. Dataset context score: 0.60. Final score: HIGH.
 
 ---
 
@@ -62,9 +92,9 @@ The app has two pages:
 
 ![Aral Sea desiccation](assets/example2_aral.jpeg)
 
-**AI Description:** Satellite view of a dramatically dried-up lake surrounded by arid desert terrain. The lake is now largely covered in algae, indicating severe water quality degradation and one of the worst ecological disasters in history.
+**AI Description:** Satellite view of a dramatically dried up lake surrounded by arid desert terrain. The lake is now largely covered in algae, indicating severe water quality degradation and one of the most well documented ecological disasters in history.
 
-**Risk Assessment:** MODERATE: Land degradation suggests elevated concern. Land protected and mountain ecosystems add moderate context risk. Dataset context score: 0.52.
+**Risk Assessment:** MODERATE: Visual score flagged land degradation. Land degradation suggests elevated concern at the national level. Land protected and mountain ecosystems add moderate context risk. Dataset context score: 0.52. Final score: MODERATE.
 
 ---
 
@@ -73,28 +103,6 @@ The app has two pages:
 
 ![Atacama Desert mining](assets/example3_atacama.jpeg)
 
-**AI Description:** Desert landscape with rocky terrain, sparse vegetation, exposed rock and sand, eroded terrain, and visible structures suggesting mining activity in the centre of the image.
+**AI Description:** Desert landscape with rocky terrain, sparse vegetation, exposed rock and sand, eroded terrain, and visible structures in the centre of the image suggesting mining activity.
 
-**Risk Assessment:** MODERATE: Annual deforestation suggests elevated concern. Forest area change adds moderate context risk. Dataset context score: 0.46.
-
----
-
-## SDGs and Project Impact
-
-Project Okavango was built as a proof of concept for environmental monitoring using open data and local AI models. The tool combines satellite imagery, geospatial datasets, and large language models to identify at risk natural regions anywhere in the world.
-
-The world is facing an accelerating environmental crisis. Forests are disappearing at unprecedented rates, land is being degraded faster than it can recover, and ecosystems that took millennia to form are being destroyed within decades. Traditional monitoring approaches rely on expensive satellite infrastructure, proprietary software, and specialised expertise that many organisations and governments simply do not have access to. Project Okavango demonstrates that meaningful environmental monitoring does not have to be expensive or inaccessible.
-
-### SDG 15 — Life on Land
-This is the most direct connection. The project monitors deforestation, land degradation, ecosystem protection, and mountain biodiversity. The three examples above each illustrate a different dimension of land based environmental threat.
-
-### SDG 13 — Climate Action
-Deforestation and land degradation are major drivers of climate change. By flagging areas experiencing active forest loss, the tool contributes to early warning systems that can inform climate action at local and national levels.
-
-### SDG 17 — Partnerships for the Goals
-The project is built entirely on free and open data sources and open-source tools, demonstrating how lightweight accessible tools can be built without proprietary software, enabling wider adoption in lower resource contexts.
-
-### SDG 11 — Sustainable Cities and Communities
-The AI Workflow allows users to analyse any location on Earth, including peri urban areas where natural land is being converted to urban use, supporting urban planners in monitoring the environmental impact of city growth.
-
-In summary, Project Okavango demonstrates how open data, geospatial analysis, and local AI models can be combined into a lightweight tool with real world environmental monitoring applications. With further development, this type of tool could support NGOs, government agencies, and researchers in tracking progress towards the SDGs in near real time.
+**Risk Assessment:** MODERATE: Visual score flagged land degradation from mining and erosion. Annual deforestation suggests elevated concern at the national level. Forest area change adds moderate context risk. Dataset context score: 0.46. Final score: MODERATE.
