@@ -92,7 +92,7 @@ The final score is a weighted combination: 60% visual evidence + 40% dataset con
 ---
 
 ### Example 2 — Aral Sea, Kazakhstan (MODERATE Risk)
-**Coordinates:** 45.1, 59.0 — Zoom 9
+**Coordinates:** 45.1, 59.1 — Zoom 9
 
 ![Aral Sea desiccation](assets/example2_aral.jpeg)
 
