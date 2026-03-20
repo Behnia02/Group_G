@@ -77,9 +77,9 @@ The repository is organized to separate the application logic, generated data, d
 | `main.py` | Main entry point of the project. |
 | `ollama.yaml` | Configuration file for the integration of the Ollama model. |
 
-## Notes
+### Notes
 
-- The `app/` folder contains the core application logic.
+- The `app/` folder contains the core application logic,  files are listed in this overview in our working chronology and not alphabetic order. 
 - Generated and intermediate outputs are stored in dedicated folders such as `downloads/`, `images/`, and `database/`.
 - The `notebooks/` folder documents exploration and development steps.
 - The `tests/` folder is focused on validating the initial download and dataset merge logic.
