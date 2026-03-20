@@ -41,7 +41,7 @@ def get_unit(indicator_key: str) -> str:
 def apply_chart_layout(fig):
     fig.update_layout(
         coloraxis_showscale=False,
-        margin=dict(l=0, r=0, t=10, b=40),
+        margin=dict(l=0, r=0, t=10, b=60),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font_color="black",

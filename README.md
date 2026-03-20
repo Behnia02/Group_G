@@ -32,7 +32,11 @@ Project Okavango is a lightweight environmental data analysis tool built for the
 
         ollama pull llava:7b
 
-4. Run the app:
+4. Run tests for our dataset download function and meeting function
+        
+        python -m pytest
+
+5. Run the app:
 
         python -m streamlit run app/streamlit_app.py
 
