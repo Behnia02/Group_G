@@ -48,6 +48,42 @@ The app has two pages:
 - **Environmental Explorer** — interactive world map with 5 environmental indicators
 - **AI Workflow** — satellite image download and AI environmental risk assessment
 
+## Repository Structure
+
+The repository is organized to separate the application logic, generated data, development notebooks, and tests.
+
+| Path | Description |
+|---|---|
+| `app/data_download.py` | Initial function to download environmental datasets. |
+| `app/map_merge.py` | Function to map the datasets to world map data. |
+| `app/__init__.py` | Necessary for `pytest` to run properly. |
+| `app/project_class.py` | Class that includes the main project functions. |
+| `app/plots_map.py` | Functions for the visualizations on page 1 of the Streamlit app. |
+| `app/plots_charts.py` | Functions for the chart visualizations on page 1 of the Streamlit app. |
+| `app/streamlit_app.py` | Main function through which the Streamlit configuration runs for both page 1 and page 2. |
+| `app/ai_workflow.py` | Construction of page 2 of the Streamlit app. |
+| `app/tile_utils.py` | Generation of ESRI imagery. |
+| `app/ollama_utils.py` | Configuration of the Ollama model. |
+| `app/db_utils.py` | Constructs the database with the created images. |
+| `app/config_loader.py` | Reads our models.yaml file to aid with access to AI settings |
+| `assets/` | Contains images used in the README. |
+| `database/` | Contains the CSV database with created images and risk assessment results. |
+| `downloads/` | Contains the initial environmental datasets after the download function runs. |
+| `images/` | Contains images created on page 2 of the app. |
+| `notebooks/` | Contains notebooks used to investigate dataset merging with map data and class construction. |
+| `tests/` | Contains tests for the initial download and `map_merge` functions. |
+| `README.md` | Project documentation and overview. |
+| `requirements.txt` | Lists the Python dependencies required to run the project. |
+| `main.py` | Main entry point of the project. |
+| `ollama.yaml` | Configuration file for the integration of the Ollama model. |
+
+## Notes
+
+- The `app/` folder contains the core application logic.
+- Generated and intermediate outputs are stored in dedicated folders such as `downloads/`, `images/`, and `database/`.
+- The `notebooks/` folder documents exploration and development steps.
+- The `tests/` folder is focused on validating the initial download and dataset merge logic.
+
 ## SDGs and Project Impact
 
 Project Okavango was built as a proof of concept for environmental monitoring using open data and local AI models. The tool combines satellite imagery, geospatial datasets, and large language models to identify at risk natural regions anywhere in the world.
@@ -76,7 +112,7 @@ The risk assessment combines two sources of evidence:
 
 2. **Dataset context score**: country level historical data from the 5 environmental datasets is used to compute a national risk score based on percentile rankings and trend direction (improving or worsening).
 
-The final score is a weighted combination: 60% visual evidence + 40% dataset context. The result is classified as LOW (below 0.75), MODERATE (0.75–1.4), or HIGH (above 1.4).
+The final score is a weighted combination of 60% visual evidence + 40% dataset context. Based on the configured thresholds, the result is classified as LOW (below 0.45), MODERATE (0.45–1.0), or HIGH (above 1.0).
 
 ## Examples of Environmental Risk Detection
 
